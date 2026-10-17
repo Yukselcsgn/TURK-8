@@ -1,6 +1,9 @@
 # 🇹🇷 TÜRK-8 PROGRAMLAMA VE KULLANIM KILAVUZU
 ### *8-Bit Türkçe Mikrobilgisayar Mimarisi Tam Referansı*
 
+> 🌍 **English Version:** For the English user manual and instruction set reference, see [USER_MANUAL.md](USER_MANUAL.md).  
+> 🏠 **Proje Özeti:** [OKUBENI.md](OKUBENI.md) veya [README.md](README.md) belgelerine göz atabilirsiniz.
+
 ---
 
 ## 📑 İÇİNDEKİLER

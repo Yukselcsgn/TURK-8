@@ -1,59 +1,64 @@
-# 🇹🇷 TÜRK-8: 8-Bit Tam Teşekküllü Türkçe Bilgisayar Mimarisi ve Sanal Makine
+# 🇹🇷 TÜRK-8: 8-Bit Virtual Computer Architecture & Emulator
 
-TÜRK-8, Türkçenin matematiksel ve sondan eklemeli doğasına uygun olarak geliştirilmiş; **Özne/Nesne $\rightarrow$ Yüklem (Fiil Sonda)** kuralını benimseyen, 64 KB bellek adreslemeli özgün bir 8-bit mikrobilgisayar sistemidir.
-
----
-
-## 🏛️ Mimari Özellikleri
-
-- **Veri Yolu:** 8-Bit (0 – 255)
-- **Adres Yolu:** 16-Bit (Tam **64 KB** adresleme uzayı)
-- **Yazmaçlar (Registers):**
-  - **`T` (Toplaç / Akümülatör):** Aritmetik ve mantık işlemlerinin ana merkezi (8-bit)
-  - **`X` (1. İndeks):** Sayaç ve dizi indeksleme yazmacı (8-bit)
-  - **`Y` (2. İndeks):** İkinci sayaç ve tablo yazmacı (8-bit)
-  - **`YG` (Yığın Göstergesi / Stack Pointer):** `0x0100 - 0x01FF` alanını yönetir (8-bit)
-  - **`PS` (Program Sayacı / PC):** Sıradaki komutun 16-bit bellek adresi
-  - **`DURUM` (Durum Bayrakları):** `E` (Elde), `S` (Sıfır), `K` (Kesme), `N` (Negatif), `T` (Taşma)
+> 🇹🇷 **Türkçe Dokümantasyon:** Türkçe anlatım için [OKUBENI.md](OKUBENI.md) ve kapsamlı kılavuz için [KULLANIM_KILAVUZU.md](KULLANIM_KILAVUZU.md) belgelerine göz atabilirsiniz.  
+> 📖 **Comprehensive Manual:** For the detailed instruction set and coding tutorial in English, see [USER_MANUAL.md](USER_MANUAL.md).
 
 ---
 
-## 🗺️ 64 KB Bellek Haritası
+**TÜRK-8** is a full-featured, educational 8-bit microcomputer architecture, two-pass assembler, and virtual machine emulator. Designed around the mathematical and agglutinative nature of the Turkish language, it follows a strict **Subject/Object $\rightarrow$ Verb (Postfix / SOV)** grammatical structure with a flat 64 KB address space.
 
-| Adres Aralığı | Bölge Adı | Açıklama |
+---
+
+## 🏛️ Architecture Overview
+
+- **Data Bus:** 8-Bit (values $0$ – $255$)
+- **Address Bus:** 16-Bit (Full **64 KB** memory address space: `0x0000` – `0xFFFF`)
+- **Registers:**
+  - **`T` (Accumulator / Toplaç):** Primary 8-bit register for all arithmetic, logic, and data transfers.
+  - **`X` (1st Index Register):** 8-bit register for counters, loops, and array indexing.
+  - **`Y` (2nd Index Register):** 8-bit secondary index register for nested loops and lookup tables.
+  - **`YG` (Stack Pointer / Yığın Göstergesi):** 8-bit pointer managing hardware stack page (`0x0100` – `0x01FF`).
+  - **`PS` (Program Counter / Program Sayacı):** 16-bit register holding the address of the next instruction.
+  - **`DURUM` (Status Flags):** `E` (Carry), `S` (Zero), `K` (Interrupt Disable), `N` (Negative), `T` (Overflow).
+
+---
+
+## 🗺️ 64 KB Memory Map
+
+| Address Range | Region | Description |
 | :--- | :--- | :--- |
-| `0x0000 - 0x00FF` | **Sıfır Sayfa (Zero Page)** | Hızlı erişimli 256 baytlık RAM |
-| `0x0100 - 0x01FF` | **Donanım Yığını (Stack)** | `YG` ile yönetilen 256 baytlık LIFO yığını |
-| `0x0200 - 0x7FFF` | **Kullanıcı Belleği (RAM)** | Kullanıcı programları ve değişkenler (31.5 KB) |
-| `0x8000 - 0x83E7` | **VRAM Ekran Belleği** | 40 sütun x 25 satır (1000 karakter) doğrudan CRT ekranı |
-| `0xA000 - 0xA0FF` | **Giriş / Çıkış (MMIO)** | Klavye tamponu, zamanlayıcı, terminal çıkış portu |
-| `0xC000 - 0xFFFF` | **Sistem ROM / BIOS** | Salt okunur kalıcı sistem belleği (16 KB) |
-| `0xFFFC - 0xFFFD` | **Sıfırlama Vektörü (RESET)**| İşlemcinin açılışta zıplayacağı adres |
-| `0xFFFE - 0xFFFF` | **Kesme Vektörü (IRQ)** | Donanım kesmesi adresi |
+| `0x0000 - 0x00FF` | **Zero Page** | Fast-access 256-byte scratchpad RAM |
+| `0x0100 - 0x01FF` | **Hardware Stack** | 256-byte LIFO stack managed by `YG` (Stack Pointer) |
+| `0x0200 - 0x7FFF` | **User RAM** | Program code and variable storage (31.5 KB) |
+| `0x8000 - 0x83E7` | **VRAM (Video RAM)** | 40 columns $\times$ 25 rows (1000 characters) memory-mapped CRT screen |
+| `0xA000 - 0xA0FF` | **Memory-Mapped I/O (MMIO)**| Keyboard data, key status, hardware timer, terminal output |
+| `0xC000 - 0xFFFF` | **System ROM / BIOS** | 16 KB read-only permanent system firmware |
+| `0xFFFC - 0xFFFD` | **Reset Vector** | Power-on / reset entry point for the CPU |
+| `0xFFFE - 0xFFFF` | **Interrupt Vector (IRQ)** | Hardware interrupt service routine address |
 
 ---
 
-## 🇹🇷 Doğal Türkçe Söz Dizimi (Syntax)
+## 🇹🇷 Natural Turkish Syntax (SOV / Postfix)
 
-Türkçe kuralına göre **nesneler/sayılar başta, fiil (yüklem) en sondadır**:
+Unlike traditional assembly languages where the action verb comes first (`LOAD 5`, `JUMP loop`), TÜRK-8 follows natural Turkish grammar where **arguments and operands precede the verb (action is at the end)**:
 
 ```assembly
 .BAŞLANGIÇ 0x0200
 
 ana_program:
-    0 X YÜKLE                  ; 0'ı X'e YÜKLE
+    0 X YÜKLE                  ; Load 0 into X (X = 0)
 dongu:
-    [mesaj + X] T YÜKLE        ; mesajın X. harfini Toplaca YÜKLE
-    0 KARŞILAŞTIR              ; 0 ile KARŞILAŞTIR
-    bitti EŞİTSE ATLA          ; Eşitse bitti'ye ATLA
+    [mesaj + X] T YÜKLE        ; Load character at mesaj[X] into Accumulator T
+    0 KARŞILAŞTIR              ; Compare with 0 (null terminator?)
+    bitti EŞİTSE ATLA          ; Jump to 'bitti' if Equal (Zero flag = 1)
 
-    T [0x8000 + X] SAKLA       ; Harfi ekrana (VRAM) SAKLA
-    3 ÇIKIŞ                    ; Terminal portuna bas
-    X ARTIR                    ; X sayacını 1 ARTIR
-    dongu ATLA                 ; Başa ATLA
+    T [0x8000 + X] SAKLA       ; Store character to VRAM screen at (0x8000 + X)
+    3 ÇIKIŞ                    ; Output byte to Port 3 (Terminal stdout)
+    X ARTIR                    ; Increment X (X++)
+    dongu ATLA                 ; Jump back to 'dongu'
 
 bitti:
-    DUR                        ; İşlemciyi DURDUR
+    DUR                        ; Halt the processor
 
 mesaj:
     .METİN "MERHABA DUNYA! TURK-8 CALISIYOR."
@@ -62,52 +67,51 @@ mesaj:
 
 ---
 
-## 🛠️ Nasıl Derlenir ve Çalıştırılır?
+## 🛠️ Building & Running
 
-### 1. Sanal Makineyi Derleme
+### 1. Build the Virtual Machine (C11)
 ```bash
 make
 ```
 
-### 2. Türkçe Assembly Kodunu Makine Koduna (.rom) Çevirme
+### 2. Assemble Turkish Assembly to Binary ROM
 ```bash
-python3 araclar/derleyici.py programlar/merhaba.asm
+python3 araclar/derleyici.py programlar/kabuk.asm programlar/kabuk.rom
 ```
 
-### 3. Programı Çalıştırma
+### 3. Run
 ```bash
-# 1. GERÇEK ZAMANLI CANLI İNTERAKTİF EKRAN MODU (Önerilen!)
-# Klavyenizden bastığınız harfler anında ekranda görünür! (Çıkış: ESC)
+# 1. Real-Time Interactive CRT Screen Mode (Recommended!)
+# Keystrokes immediately display on the retro screen. Press ESC to exit.
 ./turk8 -c programlar/kabuk.rom
 
-# 2. Programı çalıştırıp bitince ekranı ve yazmaçları göster
+# 2. Batch Execution with Screen & Register Summary
 ./turk8 -e -y programlar/merhaba.rom
 
-# 3. Canlı Etkileşimli Monitör / Ayıklayıcı ile adım adım (step by step) çalıştır
+# 3. Interactive Debugger / System Monitor (Step-by-step)
 ./turk8 -m programlar/merhaba.rom
 ```
 
 ---
 
-## 🔍 Etkileşimli Sistem Monitörü Komutları
-- `a [n]` : Adım çalıştır (Step $n$ komut)
-- `k` : Serbest koşu (Run)
-- `d [adres]` : Bellek dökümü (Hex + ASCII döküm)
-- `e` : 40x25 yeşil fosfor VRAM ekranını çiz
-- `y` : Yazmaçların ve sıradaki komutların durumunu göster
-- `b <adres>` : Kesme noktası (Breakpoint) koy
-- `c` : Çıkış
+## 🔍 Interactive Monitor Commands
+When running with `./turk8 -m <program.rom>`:
+- `a [n]` : Step execute $n$ instructions
+- `k` : Free run until halt or breakpoint
+- `d [addr]` : Hex & ASCII memory dump
+- `e` : Render 40x25 green phosphor CRT screen
+- `y` : Display registers and upcoming disassembled instructions
+- `b <addr>` : Set breakpoint at 16-bit address
+- `c` : Exit monitor
 
 ---
 
-## 🌐 Platform Desteği (macOS, Linux, Windows)
+## 🌐 Cross-Platform Compatibility
 
-TÜRK-8, tamamen platform bağımsız (cross-platform) C11 standardında geliştirilmiştir:
+TÜRK-8 is written in standard C11 and has zero mandatory third-party dependencies:
 
-- **🍎 macOS:** `clang` ve yerel POSIX `termios` ile doğrudan çalışır.
-- **🐧 Linux (Ubuntu, Debian, Fedora, Arch vb.):** `gcc` veya `clang` ile doğrudan derlenir (`make`), ek bağımlılık gerektirmez.
+- **🍎 macOS:** Native support using Clang and POSIX `termios`.
+- **🐧 Linux (Ubuntu, Debian, Fedora, Arch, etc.):** Builds out-of-the-box with GCC or Clang (`make`).
 - **🪟 Windows (10 / 11):**
-  - **WSL & Git Bash:** Doğrudan `make` ve `./turk8` ile çalışır.
-  - **Yerel Windows (CMD / PowerShell):** Kod tabanındaki yerel Windows API katmanı (`<windows.h>`, `<conio.h>`, `_kbhit()`, `_getch()`) sayesinde MinGW (`gcc`) veya MSVC ile doğrudan `turk8.exe` olarak derlenip çalışır. Windows Terminal yeşil CRT fosfor renklerini (`\033[1;32m`) yerel olarak destekler.
-
-
+  - **WSL & Git Bash:** Works identically to Linux.
+  - **Native Windows (CMD / PowerShell):** Supported via built-in `#ifdef _WIN32` Win32 Console API layer (`<windows.h>`, `<conio.h>`, `_kbhit()`, `_getch()`). Compiles natively with MinGW or MSVC to `turk8.exe`.
