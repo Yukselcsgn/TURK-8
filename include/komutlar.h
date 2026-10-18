@@ -24,6 +24,8 @@ typedef enum {
     KMT_AKTAR_T_X           = 0x1A, /* T X AKTAR: T'yi X'e kopyala */
     KMT_AKTAR_Y_T           = 0x1B, /* Y T AKTAR: Y'yi T'ye kopyala */
     KMT_AKTAR_T_Y           = 0x1C, /* T Y AKTAR: T'yi Y'ye kopyala */
+    KMT_YUKLE_DOLAYLI_T     = 0x1D, /* [[isaretci]] T YÜKLE: İşaretçinin gösterdiği adresten oku */
+    KMT_SAKLA_T_DOLAYLI     = 0x1E, /* T [[isaretci]] SAKLA: İşaretçinin gösterdiği adrese yaz */
 
     /* 3. Aritmetik ve Karşılaştırma (0x30 - 0x4F) */
     KMT_TOPLA_SABIT         = 0x30, /* <sayı> TOPLA: T = T + sayı */

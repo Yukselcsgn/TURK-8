@@ -90,6 +90,12 @@ int ayiklayici_komut_ayristir(const bellek_t *bellek, kelime_t adres, char *cikt
             case KMT_YUKLE_ADRES_T:
                 snprintf(cikti_tamponu, tampon_boyutu, "[0x%04X] T YÜKLE", hedef);
                 break;
+            case KMT_YUKLE_DOLAYLI_T:
+                snprintf(cikti_tamponu, tampon_boyutu, "[[0x%04X]] T YÜKLE", hedef);
+                break;
+            case KMT_SAKLA_T_DOLAYLI:
+                snprintf(cikti_tamponu, tampon_boyutu, "T [[0x%04X]] SAKLA", hedef);
+                break;
             case KMT_YUKLE_INDEKS_X_T:
                 snprintf(cikti_tamponu, tampon_boyutu, "[0x%04X + X] T YÜKLE", hedef);
                 break;

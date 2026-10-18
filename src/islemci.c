@@ -204,6 +204,23 @@ uint8_t islemci_tek_adim(islemci_t *islemci) {
             islemci_sifir_negatif_guncelle(islemci, islemci->Y);
             break;
 
+        case KMT_YUKLE_DOLAYLI_T: {
+            kelime_t isaretci_adresi = bellek_oku_kelime(islemci->bellek, islemci->PS);
+            islemci->PS += 2;
+            kelime_t hedef_adres = bellek_oku_kelime(islemci->bellek, isaretci_adresi);
+            islemci->T = bellek_oku(islemci->bellek, hedef_adres);
+            islemci_sifir_negatif_guncelle(islemci, islemci->T);
+            break;
+        }
+
+        case KMT_SAKLA_T_DOLAYLI: {
+            kelime_t isaretci_adresi = bellek_oku_kelime(islemci->bellek, islemci->PS);
+            islemci->PS += 2;
+            kelime_t hedef_adres = bellek_oku_kelime(islemci->bellek, isaretci_adresi);
+            bellek_yaz(islemci->bellek, hedef_adres, islemci->T);
+            break;
+        }
+
         /* Aritmetik ve Karşılaştırma */
         case KMT_TOPLA_SABIT: {
             bayt_t val = bellek_oku(islemci->bellek, islemci->PS++);

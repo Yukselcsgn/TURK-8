@@ -81,14 +81,16 @@ python3 araclar/derleyici.py programlar/kabuk.asm
 
 ### 3. Programı Çalıştırma
 ```bash
-# 1. GERÇEK ZAMANLI CANLI İNTERAKTİF EKRAN MODU (Önerilen!)
-# Klavyenizden bastığınız harfler anında ekranda görünür! (Çıkış: ESC)
+# 1. PING PONG (PONG) OYUNUNU OYNAYIN! (W: Yukarı, S: Aşağı, ESC: Çıkış)
+./turk8 -c programlar/pong.rom
+
+# 2. GERÇEK ZAMANLI CANLI İNTERAKTİF KABUK MODU
 ./turk8 -c programlar/kabuk.rom
 
-# 2. Programı çalıştırıp bitince ekranı ve yazmaçları göster
+# 3. Programı çalıştırıp bitince ekranı ve yazmaçları göster
 ./turk8 -e -y programlar/merhaba.rom
 
-# 3. Canlı Etkileşimli Monitör / Ayıklayıcı ile adım adım (step by step) çalıştır
+# 4. Canlı Etkileşimli Monitör / Ayıklayıcı ile adım adım çalıştır
 ./turk8 -m programlar/merhaba.rom
 ```
 

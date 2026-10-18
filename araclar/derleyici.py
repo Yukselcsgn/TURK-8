@@ -40,6 +40,11 @@ def derle(kaynak_metin):
 
         # Etiket tanımları: örn. "basla:" veya "dongu:"
         while ":" in satir:
+            ilk_tirnak = satir.find('"')
+            iki_nokta = satir.find(':')
+            if ilk_tirnak != -1 and iki_nokta > ilk_tirnak:
+                # İki nokta tırnak işaretinin içinde, etiket değil
+                break
             parcalar = satir.split(":", 1)
             etiket = parcalar[0].strip()
             etiketler[etiket] = mevcut_adres
@@ -67,8 +72,10 @@ def derle(kaynak_metin):
             continue
         elif ust_satir.startswith(".BAYT") or ust_satir.startswith(".BYTE"):
             param = satir.split(None, 1)[1].strip()
-            temizlenmis_komutlar.append((mevcut_adres, satir_no, "BAYT", param))
-            mevcut_adres += 1
+            parcalar = [p.strip() for p in param.split(",") if p.strip()]
+            for p in parcalar:
+                temizlenmis_komutlar.append((mevcut_adres, satir_no, "BAYT", p))
+                mevcut_adres += 1
             continue
         elif ust_satir.startswith(".KELİME") or ust_satir.startswith(".KELIME"):
             param = satir.split(None, 1)[1].strip()
@@ -221,8 +228,14 @@ def derle(kaynak_metin):
 
         # 2-Baytlık ve 3-Baytlık Komutlar
         elif "YÜKLE" in ust or "YUKLE" in ust:
-            # Örn: "5 T YÜKLE", "[0x8000] T YÜKLE", "[mesaj + X] T YÜKLE"
-            if "[adres + X]" in ust or ("[" in ust and "+ X" in ust):
+            if "[[" in ust:
+                ic = re.search(r'\[\[([^\]]+)\]\]', satir).group(1).strip()
+                hedef_adr = sayi_coz(ic, etiketler, adres)
+                baytlar.append(0x1D)
+                baytlar.append(hedef_adr & 0xFF)
+                baytlar.append((hedef_adr >> 8) & 0xFF)
+                su_anki_adres += 3
+            elif "[adres + X]" in ust or ("[" in ust and "+ X" in ust):
                 # İndeksli yükleme
                 ic = re.search(r'\[([^\]]+)\]', satir).group(1)
                 ana_etiket = ic.replace("+ X", "").replace("+X", "").strip()
@@ -262,33 +275,40 @@ def derle(kaynak_metin):
                 su_anki_adres += 2
 
         elif "SAKLA" in ust:
-            # Örn: "T [0x8000] SAKLA", "T [0x8000 + X] SAKLA", "X [0x0200] SAKLA"
-            ic = re.search(r'\[([^\]]+)\]', satir).group(1).strip()
-            if "+ X" in ic.upper() or "+X" in ic.upper():
-                ana_etiket = ic.upper().replace("+ X", "").replace("+X", "").strip()
-                hedef_adr = sayi_coz(ana_etiket, etiketler, adres)
-                baytlar.append(0x16) # T [adres + X] SAKLA
-                baytlar.append(hedef_adr & 0xFF)
-                baytlar.append((hedef_adr >> 8) & 0xFF)
-                su_anki_adres += 3
-            elif ust.startswith("X"):
+            if "[[" in ust:
+                ic = re.search(r'\[\[([^\]]+)\]\]', satir).group(1).strip()
                 hedef_adr = sayi_coz(ic, etiketler, adres)
-                baytlar.append(0x17)
-                baytlar.append(hedef_adr & 0xFF)
-                baytlar.append((hedef_adr >> 8) & 0xFF)
-                su_anki_adres += 3
-            elif ust.startswith("Y"):
-                hedef_adr = sayi_coz(ic, etiketler, adres)
-                baytlar.append(0x18)
+                baytlar.append(0x1E)
                 baytlar.append(hedef_adr & 0xFF)
                 baytlar.append((hedef_adr >> 8) & 0xFF)
                 su_anki_adres += 3
             else:
-                hedef_adr = sayi_coz(ic, etiketler, adres)
-                baytlar.append(0x15) # T [adres] SAKLA
-                baytlar.append(hedef_adr & 0xFF)
-                baytlar.append((hedef_adr >> 8) & 0xFF)
-                su_anki_adres += 3
+                ic = re.search(r'\[([^\]]+)\]', satir).group(1).strip()
+                if "+ X" in ic.upper() or "+X" in ic.upper():
+                    ana_etiket = ic.upper().replace("+ X", "").replace("+X", "").strip()
+                    hedef_adr = sayi_coz(ana_etiket, etiketler, adres)
+                    baytlar.append(0x16) # T [adres + X] SAKLA
+                    baytlar.append(hedef_adr & 0xFF)
+                    baytlar.append((hedef_adr >> 8) & 0xFF)
+                    su_anki_adres += 3
+                elif ust.startswith("X"):
+                    hedef_adr = sayi_coz(ic, etiketler, adres)
+                    baytlar.append(0x17)
+                    baytlar.append(hedef_adr & 0xFF)
+                    baytlar.append((hedef_adr >> 8) & 0xFF)
+                    su_anki_adres += 3
+                elif ust.startswith("Y"):
+                    hedef_adr = sayi_coz(ic, etiketler, adres)
+                    baytlar.append(0x18)
+                    baytlar.append(hedef_adr & 0xFF)
+                    baytlar.append((hedef_adr >> 8) & 0xFF)
+                    su_anki_adres += 3
+                else:
+                    hedef_adr = sayi_coz(ic, etiketler, adres)
+                    baytlar.append(0x15) # T [adres] SAKLA
+                    baytlar.append(hedef_adr & 0xFF)
+                    baytlar.append((hedef_adr >> 8) & 0xFF)
+                    su_anki_adres += 3
 
         # Aritmetik
         elif "TOPLA" in ust:

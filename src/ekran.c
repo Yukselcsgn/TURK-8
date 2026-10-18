@@ -188,8 +188,11 @@ void ekran_canli_mod_baslat(void *islemci_ptr, bellek_t *bellek) {
         }
 #endif
 
-        /* 2. İşlemciyi çalıştır (Her karede 200 komut döngüsü) */
-        for (int i = 0; i < 200 && !islemci->durdu; i++) {
+        /* Donanım 50 Hz Zamanlayıcısını (Timer) her karede 1 artır */
+        bellek->zamanlayici_sayaci++;
+
+        /* 2. İşlemciyi çalıştır (Her karede 500 komut döngüsü) */
+        for (int i = 0; i < 500 && !islemci->durdu; i++) {
             islemci_tek_adim(islemci);
         }
 

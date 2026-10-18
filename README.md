@@ -81,14 +81,16 @@ python3 araclar/derleyici.py programlar/kabuk.asm programlar/kabuk.rom
 
 ### 3. Run
 ```bash
-# 1. Real-Time Interactive CRT Screen Mode (Recommended!)
-# Keystrokes immediately display on the retro screen. Press ESC to exit.
+# 1. PLAY THE RETRO PING PONG (PONG) GAME! (W: Up, S: Down, ESC: Exit)
+./turk8 -c programlar/pong.rom
+
+# 2. Real-Time Interactive CRT Shell Mode
 ./turk8 -c programlar/kabuk.rom
 
-# 2. Batch Execution with Screen & Register Summary
+# 3. Batch Execution with Screen & Register Summary
 ./turk8 -e -y programlar/merhaba.rom
 
-# 3. Interactive Debugger / System Monitor (Step-by-step)
+# 4. Interactive Debugger / System Monitor (Step-by-step)
 ./turk8 -m programlar/merhaba.rom
 ```
 

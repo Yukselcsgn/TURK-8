@@ -1,0 +1,11 @@
+# Derleme çıktıları
+*.o
+turk8
+turk8.exe
+
+# macOS
+.DS_Store
+
+# Derlenmiş ROM'lar (araclar/derleyici.py ile .asm'den üretilir)
+programlar/*.rom
+tests/*.rom

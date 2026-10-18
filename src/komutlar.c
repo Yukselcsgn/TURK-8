@@ -28,6 +28,8 @@ static const komut_bilgi_t KOMUT_TABLOSU[256] = {
     [KMT_AKTAR_T_X]        = { KMT_AKTAR_T_X,        "T X AKTAR",            1, 1 },
     [KMT_AKTAR_Y_T]        = { KMT_AKTAR_Y_T,        "Y T AKTAR",            1, 1 },
     [KMT_AKTAR_T_Y]        = { KMT_AKTAR_T_Y,        "T Y AKTAR",            1, 1 },
+    [KMT_YUKLE_DOLAYLI_T]  = { KMT_YUKLE_DOLAYLI_T,  "[[isaretci]] T YÜKLE", 3, 5 },
+    [KMT_SAKLA_T_DOLAYLI]  = { KMT_SAKLA_T_DOLAYLI,  "T [[isaretci]] SAKLA", 3, 5 },
 
     [KMT_TOPLA_SABIT]      = { KMT_TOPLA_SABIT,      "<sayı> TOPLA",         2, 2 },
     [KMT_TOPLA_ADRES]      = { KMT_TOPLA_ADRES,      "[adres] TOPLA",        3, 4 },

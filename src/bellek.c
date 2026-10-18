@@ -29,7 +29,7 @@ bayt_t bellek_oku(bellek_t *bellek, kelime_t adres) {
         return bellek->klavye_hazir ? 1 : 0;
     }
     if (adres == PORT_ZAMANLAYICI) {
-        return bellek->zamanlayici_sayaci++;
+        return bellek->zamanlayici_sayaci;
     }
 
     return bellek->veri[adres];
