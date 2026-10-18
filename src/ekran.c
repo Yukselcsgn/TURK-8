@@ -70,6 +70,23 @@ void ekran_metin_yaz(bellek_t *bellek, uint8_t x, uint8_t y, const char *metin) 
     }
 }
 
+void ekran_metin_dokum(const bellek_t *bellek, const char *onek) {
+    if (!bellek) return;
+    if (!onek) onek = "";
+
+    for (int y = 0; y < EKRAN_YUKSEKLIK; y++) {
+        char satir[EKRAN_GENISLIK + 1];
+        int uzunluk = 0;
+        for (int x = 0; x < EKRAN_GENISLIK; x++) {
+            bayt_t c = bellek->veri[ADRES_VRAM_BAS + y * EKRAN_GENISLIK + x];
+            satir[x] = (c >= 32 && c <= 126) ? (char)c : ' ';
+            if (satir[x] != ' ') uzunluk = x + 1;
+        }
+        satir[uzunluk] = '\0';
+        printf("%s%s\n", onek, satir);
+    }
+}
+
 void ekran_ciz(const bellek_t *bellek) {
     if (!bellek) return;
 

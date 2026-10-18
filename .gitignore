@@ -1,5 +1,6 @@
 # Derleme çıktıları
 *.o
+*.d
 turk8
 turk8.exe
 

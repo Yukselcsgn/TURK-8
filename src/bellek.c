@@ -10,6 +10,8 @@ void bellek_olustur(bellek_t *bellek) {
     bellek->klavye_tamponu = 0;
     bellek->klavye_hazir = false;
     bellek->zamanlayici_sayaci = 0;
+    bellek->test_sonuc_var = false;
+    bellek->test_sonuc = 0;
 }
 
 void bellek_sifirla(bellek_t *bellek) {
@@ -49,6 +51,11 @@ void bellek_yaz(bellek_t *bellek, kelime_t adres, bayt_t deger) {
         /* Doğrudan terminal konsoluna karakter bas */
         putchar(deger);
         fflush(stdout);
+        return;
+    }
+    if (adres == PORT_TEST_SONUC) {
+        bellek->test_sonuc = deger;
+        bellek->test_sonuc_var = true;
         return;
     }
 

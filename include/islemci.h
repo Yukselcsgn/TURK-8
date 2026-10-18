@@ -17,6 +17,7 @@ typedef struct {
 
     /* İşlemci Durumu */
     bool      durdu;          /* true ise işlemci DUR komutuyla durmuştur */
+    bool      hata;           /* true ise bilinmeyen işlem koduyla durmuştur */
     uint64_t  toplam_cevrim;  /* Toplam saat vuruşu sayısı */
 
     /* Veri Yolu (Bağlı 64 KB Bellek) */

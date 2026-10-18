@@ -58,6 +58,7 @@ void islemci_sifirla(islemci_t *islemci) {
     islemci->YG = 0xFF; /* Yığın 0x01FF adresinden başlar */
     islemci->DURUM = BAYRAK_KESME; /* Başlangıçta kesmeler kapalı */
     islemci->durdu = false;
+    islemci->hata = false;
     islemci->toplam_cevrim = 0;
 
     /* Açılış Vektörünü Oku (0xFFFC) */
@@ -475,6 +476,7 @@ uint8_t islemci_tek_adim(islemci_t *islemci) {
             /* Bilinmeyen komut */
             printf("\n[HATA] Bilinmeyen işlem kodu: 0x%02X (Adres: 0x%04X)\n", opcode, (kelime_t)(islemci->PS - 1));
             islemci->durdu = true;
+            islemci->hata = true;
             break;
     }
 

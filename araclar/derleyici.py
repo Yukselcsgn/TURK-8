@@ -2,455 +2,367 @@
 # -*- coding: utf-8 -*-
 """
 TÜRK-8 İki Geçişli Türkçe Assembler (Çevirici)
-Doğal Türkçe söz dizimine (Özne/Nesne -> Yüklem Sonda) sahip .asm dosyalarını
+
+Doğal Türkçe söz dizimine (Özne/Nesne -> Yüklem sonda) sahip .asm dosyalarını
 TÜRK-8 ikili makine koduna (.rom) çevirir.
+
+Komut seti araclar/isa.py tablosundan okunur (tek kaynak). Komut boyutları
+tahmin edilmez, söz dizimi deseninden hesaplanır.
+
+Direktifler:
+    .BAŞLANGIÇ <adres>        Üretilecek kodun adresini belirler (.ORG)
+    .METİN "metin"            Metni bayt olarak yerleştirir (\\n \\t \\0 \\\\ \\" desteklenir)
+    .BAYT a, b, "dizge", ...  Bayt listesi
+    .KELİME a, b, ...         16 bitlik değerler (küçük uçlu)
+    .BOŞLUK <n>               n adet sıfır bayt ayırır (tampon bellek için)
+    .TANIM ad değer           Adlandırılmış sabit (kullanımdan önce tanımlanmalı)
 """
 
-import sys
+import argparse
+import os
 import re
+import sys
 
-def sayi_coz(metin, etiketler=None, adres=0):
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import isa  # noqa: E402
+
+VARSAYILAN_BASLANGIC = 0x0200
+
+_ETIKET_RE = re.compile(r"^\s*([^\s:\"';\[\]+]+)\s*:")
+_TANIMLAYICI_RE = re.compile(r"^[^\W\d]\w*$")
+
+
+class DerlemeHatasi(Exception):
+    """Bir ya da birden çok derleme hatasını taşır."""
+
+    def __init__(self, hatalar):
+        # hatalar: [(satır_no, mesaj, ham_satır), ...]
+        super().__init__("; ".join("satır %d: %s" % (n, m) for n, m, _ in hatalar))
+        self.hatalar = hatalar
+
+
+class _SatirHatasi(Exception):
+    pass
+
+
+def yorumu_at(satir):
+    """Tırnak içindeki ';' karakterlerini koruyarak satır sonu yorumunu siler."""
+    cift = tek = False
+    i = 0
+    while i < len(satir):
+        c = satir[i]
+        if c == "\\" and cift:
+            i += 2
+            continue
+        if c == '"' and not tek:
+            cift = not cift
+        elif c == "'" and not cift:
+            tek = not tek
+        elif c == ";" and not cift and not tek:
+            return satir[:i]
+        i += 1
+    return satir
+
+
+def virgulle_ayir(metin):
+    """Tırnak dışındaki virgüllerden böler."""
+    parcalar, tampon = [], []
+    cift = tek = False
+    i = 0
+    while i < len(metin):
+        c = metin[i]
+        if c == "\\" and cift:
+            tampon.append(c)
+            if i + 1 < len(metin):
+                tampon.append(metin[i + 1])
+            i += 2
+            continue
+        if c == '"' and not tek:
+            cift = not cift
+        elif c == "'" and not cift:
+            tek = not tek
+        if c == "," and not cift and not tek:
+            parcalar.append("".join(tampon).strip())
+            tampon = []
+        else:
+            tampon.append(c)
+        i += 1
+    parcalar.append("".join(tampon).strip())
+    return parcalar
+
+
+_KACIS = {"n": 10, "t": 9, "r": 13, "0": 0, "\\": 92, '"': 34, "'": 39}
+
+
+def dizge_coz(metin):
+    """"..." biçimli dizgeyi bayt listesine çevirir."""
     metin = metin.strip()
-    if metin.startswith("'") and metin.endswith("'") and len(metin) == 3:
-        return ord(metin[1])
-    if metin.startswith("0x") or metin.startswith("0X"):
-        return int(metin, 16)
-    if metin.startswith("$"):
-        return int(metin[1:], 16)
-    if metin.startswith("#"):
-        return sayi_coz(metin[1:], etiketler, adres)
-    if metin.isdigit() or (metin.startswith("-") and metin[1:].isdigit()):
-        return int(metin)
-    if etiketler and metin in etiketler:
-        return etiketler[metin]
-    raise ValueError(f"Geçersiz sayı veya tanımsız etiket: '{metin}'")
+    if len(metin) < 2 or metin[0] != '"' or metin[-1] != '"':
+        raise _SatirHatasi("dizge çift tırnak içinde olmalı: %s" % metin)
+    iclerik = metin[1:-1]
+    baytlar = []
+    i = 0
+    while i < len(iclerik):
+        c = iclerik[i]
+        if c == "\\":
+            i += 1
+            if i >= len(iclerik) or iclerik[i] not in _KACIS:
+                raise _SatirHatasi("geçersiz kaçış dizisi: \\%s" % (iclerik[i:i + 1],))
+            baytlar.append(_KACIS[iclerik[i]])
+        else:
+            kod = ord(c)
+            if kod > 255:
+                raise _SatirHatasi("karakter 8 bite sığmıyor: '%s'" % c)
+            baytlar.append(kod)
+        i += 1
+    return baytlar
+
+
+def sayi_coz(metin, semboller):
+    """Sayı (10'luk, 0x/$ onaltılık, 0b ikili), 'c' karakteri, sabit ya da etiket."""
+    m = metin.strip()
+    if m.startswith("#"):
+        m = m[1:].strip()
+    if len(m) == 3 and m[0] == "'" and m[2] == "'":
+        return ord(m[1])
+    try:
+        alt = m.lower()
+        if alt.startswith("0x"):
+            return int(m[2:], 16)
+        if alt.startswith("$"):
+            return int(m[1:], 16)
+        if alt.startswith("0b"):
+            return int(m[2:], 2)
+        return int(m, 10)
+    except ValueError:
+        pass
+    if m in semboller:
+        return semboller[m]
+    raise _SatirHatasi("tanımsız etiket ya da geçersiz sayı: '%s'" % metin.strip())
+
+
+def _bayt_degeri(deger, metin):
+    if not -128 <= deger <= 255:
+        raise _SatirHatasi("değer 8 bite sığmıyor (-128..255): %s = %d" % (metin, deger))
+    return deger & 0xFF
+
+
+def _adres_degeri(deger, metin):
+    if not 0 <= deger <= 0xFFFF:
+        raise _SatirHatasi("adres 16 bite sığmıyor (0..65535): %s = %d" % (metin, deger))
+    return deger
+
+
+def _direktif_adi(katli):
+    return katli.split()[0]
+
+
+def derle_ayrintili(kaynak_metin):
+    """Kaynağı derler. (başlangıç_adresi, bayt_dizisi, liste) döndürür.
+
+    liste: [(adres, bayt_listesi, kaynak_satırı), ...] — hata ayıklama içindir.
+    Hata varsa DerlemeHatasi fırlatır (tüm hatalar toplu).
+    """
+    satirlar = kaynak_metin.splitlines()
+    semboller = {}
+    ogeler = []   # (adres, satir_no, ham, tip, veri)
+    hatalar = []
+    adres = VARSAYILAN_BASLANGIC
+
+    # ---------------- 1. GEÇİŞ: boyutlar ve etiket adresleri ----------------
+    for satir_no, ham in enumerate(satirlar, 1):
+        try:
+            satir = yorumu_at(ham).strip()
+
+            while True:
+                m = _ETIKET_RE.match(satir)
+                if not m:
+                    break
+                ad = m.group(1)
+                if not _TANIMLAYICI_RE.match(ad):
+                    raise _SatirHatasi("geçersiz etiket adı: '%s'" % ad)
+                if ad in semboller:
+                    raise _SatirHatasi("etiket birden çok kez tanımlı: '%s'" % ad)
+                semboller[ad] = adres
+                satir = satir[m.end():].strip()
+
+            if not satir:
+                continue
+
+            if satir.startswith("."):
+                parcalar = satir.split(None, 1)
+                ad = isa.katla(parcalar[0])
+                arg = parcalar[1].strip() if len(parcalar) > 1 else ""
+
+                if ad in (".BASLANGIC", ".ORG"):
+                    if not arg:
+                        raise _SatirHatasi("%s bir adres bekler" % parcalar[0])
+                    adres = _adres_degeri(sayi_coz(arg, semboller), arg)
+                elif ad in (".METIN", ".TEXT"):
+                    baytlar = dizge_coz(arg)
+                    ogeler.append((adres, satir_no, ham, "VERI", baytlar))
+                    adres += len(baytlar)
+                elif ad in (".BAYT", ".BYTE"):
+                    if not arg:
+                        raise _SatirHatasi("%s bir değer listesi bekler" % parcalar[0])
+                    ogeler.append((adres, satir_no, ham, "BAYT", virgulle_ayir(arg)))
+                    for oge in virgulle_ayir(arg):
+                        adres += len(dizge_coz(oge)) if oge.startswith('"') else 1
+                elif ad in (".KELIME", ".WORD"):
+                    if not arg:
+                        raise _SatirHatasi("%s bir değer listesi bekler" % parcalar[0])
+                    liste = virgulle_ayir(arg)
+                    ogeler.append((adres, satir_no, ham, "KELIME", liste))
+                    adres += 2 * len(liste)
+                elif ad in (".BOSLUK", ".RESERVE"):
+                    n = sayi_coz(arg, semboller)
+                    if not 0 <= n <= 0x10000:
+                        raise _SatirHatasi(".BOŞLUK değeri 0..65536 olmalı: %d" % n)
+                    ogeler.append((adres, satir_no, ham, "VERI", [0] * n))
+                    adres += n
+                elif ad in (".TANIM", ".EQU"):
+                    kisimlar = arg.split(None, 1)
+                    if len(kisimlar) != 2:
+                        raise _SatirHatasi(".TANIM kullanımı: .TANIM ad değer")
+                    sabit_ad, deger_metni = kisimlar
+                    if not _TANIMLAYICI_RE.match(sabit_ad):
+                        raise _SatirHatasi("geçersiz sabit adı: '%s'" % sabit_ad)
+                    if sabit_ad in semboller:
+                        raise _SatirHatasi("ad birden çok kez tanımlı: '%s'" % sabit_ad)
+                    semboller[sabit_ad] = sayi_coz(deger_metni, semboller)
+                else:
+                    raise _SatirHatasi("bilinmeyen direktif: %s" % parcalar[0])
+
+                if adres > 0x10000:
+                    raise _SatirHatasi("program 64 KB bellek sınırını aşıyor")
+                continue
+
+            eslesmeler = isa.eslestir(satir)
+            if not eslesmeler:
+                raise _SatirHatasi("anlaşılamayan Türkçe söz dizimi: '%s'" % satir)
+            if len(eslesmeler) > 1:
+                adlar = ", ".join(k.ad for k, _ in eslesmeler)
+                raise _SatirHatasi("belirsiz söz dizimi (%s): '%s'" % (adlar, satir))
+            komut, islenen = eslesmeler[0]
+            ogeler.append((adres, satir_no, ham, "KOMUT", (komut, islenen)))
+            adres += komut.boyut
+            if adres > 0x10000:
+                raise _SatirHatasi("program 64 KB bellek sınırını aşıyor")
+
+        except _SatirHatasi as e:
+            hatalar.append((satir_no, str(e), ham))
+
+    if hatalar:
+        raise DerlemeHatasi(hatalar)
+
+    # ---------------- 2. GEÇİŞ: makine kodunu üret ----------------
+    parcalar = []   # (adres, bayt_listesi, ham)
+    for oge_adres, satir_no, ham, tip, veri in ogeler:
+        try:
+            if tip == "VERI":
+                baytlar = list(veri)
+            elif tip == "BAYT":
+                baytlar = []
+                for oge in veri:
+                    if oge.startswith('"'):
+                        baytlar.extend(dizge_coz(oge))
+                    else:
+                        baytlar.append(_bayt_degeri(sayi_coz(oge, semboller), oge))
+            elif tip == "KELIME":
+                baytlar = []
+                for oge in veri:
+                    deger = sayi_coz(oge, semboller)
+                    if not -32768 <= deger <= 0xFFFF:
+                        raise _SatirHatasi("değer 16 bite sığmıyor: %s = %d" % (oge, deger))
+                    deger &= 0xFFFF
+                    baytlar.extend([deger & 0xFF, deger >> 8])
+            else:  # KOMUT
+                komut, islenen = veri
+                baytlar = [komut.opkod]
+                if komut.islenenler:
+                    deger = sayi_coz(islenen, semboller)
+                    if komut.islenenler[0] == "N":
+                        baytlar.append(_bayt_degeri(deger, islenen))
+                    else:
+                        deger = _adres_degeri(deger, islenen)
+                        baytlar.extend([deger & 0xFF, deger >> 8])
+            parcalar.append((oge_adres, baytlar, ham))
+        except _SatirHatasi as e:
+            hatalar.append((satir_no, str(e), ham))
+
+    if hatalar:
+        raise DerlemeHatasi(hatalar)
+
+    if not parcalar:
+        return VARSAYILAN_BASLANGIC, bytearray(), []
+
+    # Parçaları adres sırasıyla birleştir; aradaki boşluk sıfırla dolar.
+    baslangic = parcalar[0][0]
+    imaj = bytearray()
+    for oge_adres, baytlar, ham in parcalar:
+        konum = oge_adres - baslangic
+        if konum < len(imaj):
+            satir_no = next(n for a, n, h, t, v in ogeler if a == oge_adres and h == ham)
+            raise DerlemeHatasi([(satir_no,
+                                  "kod parçaları çakışıyor ya da adres geriye gidiyor (0x%04X)" % oge_adres,
+                                  ham)])
+        imaj.extend(b"\x00" * (konum - len(imaj)))
+        imaj.extend(baytlar)
+
+    return baslangic, imaj, parcalar
+
 
 def derle(kaynak_metin):
-    satirlar = kaynak_metin.splitlines()
+    """(başlangıç_adresi, bayt_dizisi) döndürür."""
+    baslangic, imaj, _ = derle_ayrintili(kaynak_metin)
+    return baslangic, imaj
 
-    # 1. GEÇİŞ: Etiketleri ve Adresleri Topla
-    etiketler = {}
-    mevcut_adres = 0x0200 # Varsayılan RAM başlangıcı
-    temizlenmis_komutlar = []
 
-    for satir_no, ham_satir in enumerate(satirlar, 1):
-        satir = ham_satir.split(";")[0].strip()
-        if not satir:
-            continue
-
-        # Etiket tanımları: örn. "basla:" veya "dongu:"
-        while ":" in satir:
-            ilk_tirnak = satir.find('"')
-            iki_nokta = satir.find(':')
-            if ilk_tirnak != -1 and iki_nokta > ilk_tirnak:
-                # İki nokta tırnak işaretinin içinde, etiket değil
-                break
-            parcalar = satir.split(":", 1)
-            etiket = parcalar[0].strip()
-            etiketler[etiket] = mevcut_adres
-            satir = parcalar[1].strip()
-            if not satir:
-                break
-
-        if not satir:
-            continue
-
-        # Direktifler
-        ust_satir = satir.upper()
-        if ust_satir.startswith(".BAŞLANGIÇ") or ust_satir.startswith(".BASLANGIC") or ust_satir.startswith(".ORG"):
-            param = satir.split(None, 1)[1].strip()
-            mevcut_adres = sayi_coz(param)
-            continue
-        elif ust_satir.startswith(".METİN") or ust_satir.startswith(".METIN"):
-            # Metin direktifi: örn: .METİN "MERHABA"
-            eslesme = re.search(r'"([^"]*)"', satir)
-            if eslesme:
-                metin = eslesme.group(1)
-                boyut = len(metin.encode("latin-1", "replace"))
-                temizlenmis_komutlar.append((mevcut_adres, satir_no, "METIN", metin))
-                mevcut_adres += boyut
-            continue
-        elif ust_satir.startswith(".BAYT") or ust_satir.startswith(".BYTE"):
-            param = satir.split(None, 1)[1].strip()
-            parcalar = [p.strip() for p in param.split(",") if p.strip()]
-            for p in parcalar:
-                temizlenmis_komutlar.append((mevcut_adres, satir_no, "BAYT", p))
-                mevcut_adres += 1
-            continue
-        elif ust_satir.startswith(".KELİME") or ust_satir.startswith(".KELIME"):
-            param = satir.split(None, 1)[1].strip()
-            temizlenmis_komutlar.append((mevcut_adres, satir_no, "KELIME", param))
-            mevcut_adres += 2
-            continue
-
-        # Normal Komutlar
-        # Komut boyutunu tahmin et
-        kelimeler = satir.split()
-        son_kelime = kelimeler[-1].upper()
-
-        boyut = 1
-        # 3 baytlık komutlar (16-bit adres alanlar)
-        if any(son_kelime.endswith(k) for k in ["ATLA", "ÇAĞIR", "CAGIR"]):
-            boyut = 3
-        elif "SAKLA" in ust_satir:
-            boyut = 3
-        elif "YÜKLE" in ust_satir or "YUKLE" in ust_satir:
-            if "[" in satir:
-                boyut = 3
+def liste_yazdir(parcalar, cikti=sys.stdout):
+    for adres, baytlar, ham in parcalar:
+        for ofset in range(0, max(len(baytlar), 1), 4):
+            dilim = baytlar[ofset:ofset + 4]
+            hex_metni = " ".join("%02X" % b for b in dilim)
+            if ofset == 0:
+                cikti.write("%04X  %-11s %s\n" % (adres, hex_metni, ham.rstrip()))
             else:
-                boyut = 2
-        elif any(k in ust_satir for k in ["TOPLA", "ÇIKAR", "CIKAR", "KARŞILAŞTIR", "KARSILASTIR", "VE", "VEYA", "ÖZELVEYA", "OZELVEYA", "GİRİŞ", "GIRIS", "ÇIKIŞ", "CIKIS"]):
-            if "[" in satir:
-                boyut = 3
-            elif any(k in ust_satir for k in ["ARTIR", "AZALT", "DEĞİLLE", "DEGILLE", "KAYDIR"]):
-                boyut = 1
-            else:
-                boyut = 2
-        elif any(k in ust_satir for k in ["ARTIR", "AZALT", "DEĞİLLE", "DEGILLE", "KAYDIR", "AKTAR", "İT", "IT", "ÇEK", "CEK", "DÖN", "DON", "DUR", "BOŞ", "BOS", "KESME", "SIFIRLA"]):
-            boyut = 1
+                cikti.write("%04X  %s\n" % (adres + ofset, hex_metni))
 
-        temizlenmis_komutlar.append((mevcut_adres, satir_no, "KOMUT", satir))
-        mevcut_adres += boyut
 
-    # 2. GEÇİŞ: Makine Kodunu (Baytları) Üret
-    baytlar = bytearray()
-    program_baslangic = temizlenmis_komutlar[0][0] if temizlenmis_komutlar else 0x0200
+def main(argv=None):
+    ap = argparse.ArgumentParser(description="TÜRK-8 Türkçe Assembler")
+    ap.add_argument("kaynak", help="kaynak .asm dosyası")
+    ap.add_argument("hedef", nargs="?", help="çıktı .rom dosyası (varsayılan: kaynak adı + .rom)")
+    ap.add_argument("-l", "--liste", action="store_true", help="adres/bayt/kaynak listesini yazdır")
+    args = ap.parse_args(argv)
 
-    su_anki_adres = program_baslangic
-
-    for adres, satir_no, tip, satir in temizlenmis_komutlar:
-        # Gerekirse aradaki boşlukları 0 ile doldur
-        while su_anki_adres < adres:
-            baytlar.append(0x00)
-            su_anki_adres += 1
-
-        if tip == "METIN":
-            for c in satir.encode("latin-1", "replace"):
-                baytlar.append(c)
-                su_anki_adres += 1
-            continue
-        elif tip == "BAYT":
-            val = sayi_coz(satir, etiketler, adres) & 0xFF
-            baytlar.append(val)
-            su_anki_adres += 1
-            continue
-        elif tip == "KELIME":
-            val = sayi_coz(satir, etiketler, adres) & 0xFFFF
-            baytlar.append(val & 0xFF)
-            baytlar.append((val >> 8) & 0xFF)
-            su_anki_adres += 2
-            continue
-
-        # Komut Çözümleme
-        ust = satir.upper().strip()
-
-        # 1-Baytlık Komutlar
-        if ust in ["BOŞ", "BOS", "NOP"]:
-            baytlar.append(0x00)
-            su_anki_adres += 1
-        elif ust in ["DUR", "HALT", "HLT"]:
-            baytlar.append(0x01)
-            su_anki_adres += 1
-        elif ust in ["KESME AÇ", "KESME AC"]:
-            baytlar.append(0x02)
-            su_anki_adres += 1
-        elif ust in ["KESME KAPAT"]:
-            baytlar.append(0x03)
-            su_anki_adres += 1
-        elif ust in ["SIFIRLA"]:
-            baytlar.append(0x04)
-            su_anki_adres += 1
-
-        # Aktarma
-        elif ust in ["X T AKTAR"]:
-            baytlar.append(0x19)
-            su_anki_adres += 1
-        elif ust in ["T X AKTAR"]:
-            baytlar.append(0x1A)
-            su_anki_adres += 1
-        elif ust in ["Y T AKTAR"]:
-            baytlar.append(0x1B)
-            su_anki_adres += 1
-        elif ust in ["T Y AKTAR"]:
-            baytlar.append(0x1C)
-            su_anki_adres += 1
-
-        # Artır / Azalt
-        elif ust in ["T ARTIR"]:
-            baytlar.append(0x35)
-            su_anki_adres += 1
-        elif ust in ["X ARTIR"]:
-            baytlar.append(0x36)
-            su_anki_adres += 1
-        elif ust in ["Y ARTIR"]:
-            baytlar.append(0x37)
-            su_anki_adres += 1
-        elif ust in ["T AZALT"]:
-            baytlar.append(0x38)
-            su_anki_adres += 1
-        elif ust in ["X AZALT"]:
-            baytlar.append(0x39)
-            su_anki_adres += 1
-        elif ust in ["Y AZALT"]:
-            baytlar.append(0x3A)
-            su_anki_adres += 1
-
-        # Mantık & Bit
-        elif ust in ["T DEĞİLLE", "T DEGILLE"]:
-            baytlar.append(0x53)
-            su_anki_adres += 1
-        elif ust in ["T SOLA KAYDIR"]:
-            baytlar.append(0x54)
-            su_anki_adres += 1
-        elif ust in ["T SAĞA KAYDIR", "T SAGA KAYDIR"]:
-            baytlar.append(0x55)
-            su_anki_adres += 1
-
-        # Yığın & Dönüş
-        elif ust in ["DÖN", "DON"]:
-            baytlar.append(0x91)
-            su_anki_adres += 1
-        elif ust in ["KESMEDEN DÖN", "KESMEDEN DON"]:
-            baytlar.append(0x92)
-            su_anki_adres += 1
-        elif ust in ["T İT", "T IT"]:
-            baytlar.append(0x93)
-            su_anki_adres += 1
-        elif ust in ["T ÇEK", "T CEK"]:
-            baytlar.append(0x94)
-            su_anki_adres += 1
-        elif ust in ["DURUM İT", "DURUM IT"]:
-            baytlar.append(0x95)
-            su_anki_adres += 1
-        elif ust in ["DURUM ÇEK", "DURUM CEK"]:
-            baytlar.append(0x96)
-            su_anki_adres += 1
-
-        # 2-Baytlık ve 3-Baytlık Komutlar
-        elif "YÜKLE" in ust or "YUKLE" in ust:
-            if "[[" in ust:
-                ic = re.search(r'\[\[([^\]]+)\]\]', satir).group(1).strip()
-                hedef_adr = sayi_coz(ic, etiketler, adres)
-                baytlar.append(0x1D)
-                baytlar.append(hedef_adr & 0xFF)
-                baytlar.append((hedef_adr >> 8) & 0xFF)
-                su_anki_adres += 3
-            elif "[adres + X]" in ust or ("[" in ust and "+ X" in ust):
-                # İndeksli yükleme
-                ic = re.search(r'\[([^\]]+)\]', satir).group(1)
-                ana_etiket = ic.replace("+ X", "").replace("+X", "").strip()
-                hedef_adr = sayi_coz(ana_etiket, etiketler, adres)
-                baytlar.append(0x12)
-                baytlar.append(hedef_adr & 0xFF)
-                baytlar.append((hedef_adr >> 8) & 0xFF)
-                su_anki_adres += 3
-            elif "[" in ust:
-                # Adresten yükleme
-                ic = re.search(r'\[([^\]]+)\]', satir).group(1).strip()
-                hedef_adr = sayi_coz(ic, etiketler, adres)
-                baytlar.append(0x11)
-                baytlar.append(hedef_adr & 0xFF)
-                baytlar.append((hedef_adr >> 8) & 0xFF)
-                su_anki_adres += 3
-            elif " X " in ust:
-                # Sayı X YÜKLE
-                val_str = satir.split()[0]
-                val = sayi_coz(val_str, etiketler, adres) & 0xFF
-                baytlar.append(0x13)
-                baytlar.append(val)
-                su_anki_adres += 2
-            elif " Y " in ust:
-                # Sayı Y YÜKLE
-                val_str = satir.split()[0]
-                val = sayi_coz(val_str, etiketler, adres) & 0xFF
-                baytlar.append(0x14)
-                baytlar.append(val)
-                su_anki_adres += 2
-            else:
-                # Sayı T YÜKLE
-                val_str = satir.split()[0]
-                val = sayi_coz(val_str, etiketler, adres) & 0xFF
-                baytlar.append(0x10)
-                baytlar.append(val)
-                su_anki_adres += 2
-
-        elif "SAKLA" in ust:
-            if "[[" in ust:
-                ic = re.search(r'\[\[([^\]]+)\]\]', satir).group(1).strip()
-                hedef_adr = sayi_coz(ic, etiketler, adres)
-                baytlar.append(0x1E)
-                baytlar.append(hedef_adr & 0xFF)
-                baytlar.append((hedef_adr >> 8) & 0xFF)
-                su_anki_adres += 3
-            else:
-                ic = re.search(r'\[([^\]]+)\]', satir).group(1).strip()
-                if "+ X" in ic.upper() or "+X" in ic.upper():
-                    ana_etiket = ic.upper().replace("+ X", "").replace("+X", "").strip()
-                    hedef_adr = sayi_coz(ana_etiket, etiketler, adres)
-                    baytlar.append(0x16) # T [adres + X] SAKLA
-                    baytlar.append(hedef_adr & 0xFF)
-                    baytlar.append((hedef_adr >> 8) & 0xFF)
-                    su_anki_adres += 3
-                elif ust.startswith("X"):
-                    hedef_adr = sayi_coz(ic, etiketler, adres)
-                    baytlar.append(0x17)
-                    baytlar.append(hedef_adr & 0xFF)
-                    baytlar.append((hedef_adr >> 8) & 0xFF)
-                    su_anki_adres += 3
-                elif ust.startswith("Y"):
-                    hedef_adr = sayi_coz(ic, etiketler, adres)
-                    baytlar.append(0x18)
-                    baytlar.append(hedef_adr & 0xFF)
-                    baytlar.append((hedef_adr >> 8) & 0xFF)
-                    su_anki_adres += 3
-                else:
-                    hedef_adr = sayi_coz(ic, etiketler, adres)
-                    baytlar.append(0x15) # T [adres] SAKLA
-                    baytlar.append(hedef_adr & 0xFF)
-                    baytlar.append((hedef_adr >> 8) & 0xFF)
-                    su_anki_adres += 3
-
-        # Aritmetik
-        elif "TOPLA" in ust:
-            if "ELDEYLE" in ust:
-                val_str = satir.split()[0]
-                val = sayi_coz(val_str, etiketler, adres) & 0xFF
-                baytlar.append(0x32)
-                baytlar.append(val)
-                su_anki_adres += 2
-            elif "[" in ust:
-                ic = re.search(r'\[([^\]]+)\]', satir).group(1).strip()
-                hedef_adr = sayi_coz(ic, etiketler, adres)
-                baytlar.append(0x31)
-                baytlar.append(hedef_adr & 0xFF)
-                baytlar.append((hedef_adr >> 8) & 0xFF)
-                su_anki_adres += 3
-            else:
-                val_str = satir.split()[0]
-                val = sayi_coz(val_str, etiketler, adres) & 0xFF
-                baytlar.append(0x30)
-                baytlar.append(val)
-                su_anki_adres += 2
-
-        elif "ÇIKAR" in ust or "CIKAR" in ust:
-            if "[" in ust:
-                ic = re.search(r'\[([^\]]+)\]', satir).group(1).strip()
-                hedef_adr = sayi_coz(ic, etiketler, adres)
-                baytlar.append(0x34)
-                baytlar.append(hedef_adr & 0xFF)
-                baytlar.append((hedef_adr >> 8) & 0xFF)
-                su_anki_adres += 3
-            else:
-                val_str = satir.split()[0]
-                val = sayi_coz(val_str, etiketler, adres) & 0xFF
-                baytlar.append(0x33)
-                baytlar.append(val)
-                su_anki_adres += 2
-
-        elif "KARŞILAŞTIR" in ust or "KARSILASTIR" in ust:
-            if " X " in ust:
-                val_str = satir.split()[0]
-                val = sayi_coz(val_str, etiketler, adres) & 0xFF
-                baytlar.append(0x3C)
-                baytlar.append(val)
-                su_anki_adres += 2
-            else:
-                val_str = satir.split()[0]
-                val = sayi_coz(val_str, etiketler, adres) & 0xFF
-                baytlar.append(0x3B)
-                baytlar.append(val)
-                su_anki_adres += 2
-
-        # Mantık
-        elif ust.endswith(" VE"):
-            val_str = satir.split()[0]
-            val = sayi_coz(val_str, etiketler, adres) & 0xFF
-            baytlar.append(0x50)
-            baytlar.append(val)
-            su_anki_adres += 2
-        elif ust.endswith(" VEYA"):
-            val_str = satir.split()[0]
-            val = sayi_coz(val_str, etiketler, adres) & 0xFF
-            baytlar.append(0x51)
-            baytlar.append(val)
-            su_anki_adres += 2
-        elif ust.endswith(" ÖZELVEYA") or ust.endswith(" OZELVEYA"):
-            val_str = satir.split()[0]
-            val = sayi_coz(val_str, etiketler, adres) & 0xFF
-            baytlar.append(0x52)
-            baytlar.append(val)
-            su_anki_adres += 2
-
-        # Atlamalar
-        elif "ATLA" in ust:
-            hedef_str = satir.split()[0]
-            hedef_adr = sayi_coz(hedef_str, etiketler, adres)
-            if "EŞİTSE" in ust or "ESITSE" in ust:
-                baytlar.append(0x71)
-            elif "FARKLIYSA" in ust:
-                baytlar.append(0x72)
-            elif "BÜYÜKSE" in ust or "BUYUKSE" in ust:
-                baytlar.append(0x73)
-            elif "KÜÇÜKSE" in ust or "KUCUKSE" in ust:
-                baytlar.append(0x74)
-            elif "ELDE VARSA" in ust:
-                baytlar.append(0x75)
-            else:
-                baytlar.append(0x70)
-            baytlar.append(hedef_adr & 0xFF)
-            baytlar.append((hedef_adr >> 8) & 0xFF)
-            su_anki_adres += 3
-
-        # Fonksiyon Çağırma
-        elif "ÇAĞIR" in ust or "CAGIR" in ust:
-            hedef_str = satir.split()[0]
-            hedef_adr = sayi_coz(hedef_str, etiketler, adres)
-            baytlar.append(0x90)
-            baytlar.append(hedef_adr & 0xFF)
-            baytlar.append((hedef_adr >> 8) & 0xFF)
-            su_anki_adres += 3
-
-        # Port I/O
-        elif "GİRİŞ" in ust or "GIRIS" in ust:
-            port_str = satir.split()[0]
-            port = sayi_coz(port_str, etiketler, adres) & 0xFF
-            baytlar.append(0xB0)
-            baytlar.append(port)
-            su_anki_adres += 2
-        elif "ÇIKIŞ" in ust or "CIKIS" in ust:
-            port_str = satir.split()[0]
-            port = sayi_coz(port_str, etiketler, adres) & 0xFF
-            baytlar.append(0xB1)
-            baytlar.append(port)
-            su_anki_adres += 2
-
-        else:
-            raise SyntaxError(f"Satır {satir_no}: Anlaşılamayan Türkçe söz dizimi: '{satir}'")
-
-    return program_baslangic, baytlar
-
-def main():
-    if len(sys.argv) < 2:
-        print("TÜRK-8 Türkçe Assembler")
-        print("Kullanım: python3 araclar/derleyici.py <kaynak.asm> [hedef.rom]")
-        sys.exit(1)
-
-    kaynak_dosya = sys.argv[1]
-    hedef_dosya = sys.argv[2] if len(sys.argv) > 2 else kaynak_dosya.rsplit(".", 1)[0] + ".rom"
-
-    with open(kaynak_dosya, "r", encoding="utf-8") as f:
-        kaynak = f.read()
+    hedef = args.hedef or args.kaynak.rsplit(".", 1)[0] + ".rom"
 
     try:
-        baslangic, baytlar = derle(kaynak)
-        with open(hedef_dosya, "wb") as f:
-            f.write(baytlar)
-        print(f"[BAŞARILI] '{kaynak_dosya}' derlendi -> '{hedef_dosya}'")
-        print(f"[BİLGİ] Başlangıç Adresi: 0x{baslangic:04X}, Toplam Boyut: {len(baytlar)} bayt")
-    except Exception as e:
-        print(f"[HATA] {e}", file=sys.stderr)
-        sys.exit(1)
+        with open(args.kaynak, "r", encoding="utf-8") as f:
+            kaynak = f.read()
+    except OSError as e:
+        print("[HATA] %s" % e, file=sys.stderr)
+        return 1
+
+    try:
+        baslangic, imaj, parcalar = derle_ayrintili(kaynak)
+    except DerlemeHatasi as e:
+        for satir_no, mesaj, ham in e.hatalar:
+            print("[HATA] %s satır %d: %s" % (args.kaynak, satir_no, mesaj), file=sys.stderr)
+            print("       %s" % ham.strip(), file=sys.stderr)
+        print("[HATA] %d hata, derleme durduruldu." % len(e.hatalar), file=sys.stderr)
+        return 1
+
+    if args.liste:
+        liste_yazdir(parcalar)
+
+    with open(hedef, "wb") as f:
+        f.write(imaj)
+    print("[BAŞARILI] '%s' derlendi -> '%s'" % (args.kaynak, hedef))
+    print("[BİLGİ] Başlangıç Adresi: 0x%04X, Toplam Boyut: %d bayt" % (baslangic, len(imaj)))
+    return 0
+
 
 if __name__ == "__main__":
-    main()
-
+    sys.exit(main())

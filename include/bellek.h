@@ -12,6 +12,10 @@ typedef struct {
     bayt_t  klavye_tamponu;
     bool    klavye_hazir;
     bayt_t  zamanlayici_sayaci;
+
+    /* Test modu: program PORT_TEST_SONUC'a yazınca dolar */
+    bool    test_sonuc_var;
+    bayt_t  test_sonuc;
 } bellek_t;
 
 /* Bellek Yönetim Fonksiyonları */

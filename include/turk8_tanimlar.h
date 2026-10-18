@@ -33,6 +33,7 @@ typedef int8_t    isaretli_bayt_t;  /* İşaretli 8-bit (-128 ile +127) */
 #define PORT_KLAVYE_DURUM   0xA001    /* 1: Yeni tuş var, 0: Yok */
 #define PORT_ZAMANLAYICI    0xA002    /* Milisaniye sayacı */
 #define PORT_TERMINAL_YAZ   0xA003    /* Standart çıktıya bayt basar */
+#define PORT_TEST_SONUC     0xA0FF    /* Test modu: 1 yazılırsa BAŞARILI, başka değer hata kodu; yazılınca çalışma biter */
 
 #define ADRES_ROM_BAS       0xC000    /* 0xC000 - 0xFFFF: Kalıcı Sistem ROM / BIOS (16 KB) */
 #define VEKTOR_KESME        0xFFFE    /* Donanım kesmesi atlama adresi */
