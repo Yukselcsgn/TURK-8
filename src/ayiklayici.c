@@ -37,6 +37,9 @@ int ayiklayici_komut_ayristir(const bellek_t *bellek, kelime_t adres, char *cikt
     } else if (bilgi->uzunluk_bayt == 2) {
         bayt_t op1 = bellek->veri[(kelime_t)(adres + 1)];
         switch ((komut_kodu_t)opcode) {
+            case KMT_SISTEM:
+                snprintf(cikti_tamponu, tampon_boyutu, "0x%02X (%d) SİSTEM", op1, op1);
+                break;
             case KMT_YUKLE_SABIT_T:
                 snprintf(cikti_tamponu, tampon_boyutu, "0x%02X (%d) T YÜKLE", op1, op1);
                 break;
@@ -55,11 +58,17 @@ int ayiklayici_komut_ayristir(const bellek_t *bellek, kelime_t adres, char *cikt
             case KMT_CIKAR_SABIT:
                 snprintf(cikti_tamponu, tampon_boyutu, "0x%02X (%d) ÇIKAR", op1, op1);
                 break;
+            case KMT_CIKAR_BORCLA:
+                snprintf(cikti_tamponu, tampon_boyutu, "0x%02X (%d) BORÇLA ÇIKAR", op1, op1);
+                break;
             case KMT_KARSILASTIR_SABIT:
                 snprintf(cikti_tamponu, tampon_boyutu, "0x%02X (%d) KARŞILAŞTIR", op1, op1);
                 break;
             case KMT_KARSILASTIR_X:
                 snprintf(cikti_tamponu, tampon_boyutu, "0x%02X (%d) X KARŞILAŞTIR", op1, op1);
+                break;
+            case KMT_KARSILASTIR_Y:
+                snprintf(cikti_tamponu, tampon_boyutu, "0x%02X (%d) Y KARŞILAŞTIR", op1, op1);
                 break;
             case KMT_VE_SABIT:
                 snprintf(cikti_tamponu, tampon_boyutu, "0x%02X VE", op1);
@@ -69,6 +78,9 @@ int ayiklayici_komut_ayristir(const bellek_t *bellek, kelime_t adres, char *cikt
                 break;
             case KMT_OZELVEYA_SABIT:
                 snprintf(cikti_tamponu, tampon_boyutu, "0x%02X ÖZELVEYA", op1);
+                break;
+            case KMT_BIT_SINA:
+                snprintf(cikti_tamponu, tampon_boyutu, "0x%02X BİT SINA", op1);
                 break;
             case KMT_GIRIS:
                 snprintf(cikti_tamponu, tampon_boyutu, "PORT 0x%02X GİRİŞ", op1);
@@ -90,6 +102,12 @@ int ayiklayici_komut_ayristir(const bellek_t *bellek, kelime_t adres, char *cikt
             case KMT_YUKLE_ADRES_T:
                 snprintf(cikti_tamponu, tampon_boyutu, "[0x%04X] T YÜKLE", hedef);
                 break;
+            case KMT_YUKLE_ADRES_X:
+                snprintf(cikti_tamponu, tampon_boyutu, "[0x%04X] X YÜKLE", hedef);
+                break;
+            case KMT_YUKLE_ADRES_Y:
+                snprintf(cikti_tamponu, tampon_boyutu, "[0x%04X] Y YÜKLE", hedef);
+                break;
             case KMT_YUKLE_DOLAYLI_T:
                 snprintf(cikti_tamponu, tampon_boyutu, "[[0x%04X]] T YÜKLE", hedef);
                 break;
@@ -99,11 +117,23 @@ int ayiklayici_komut_ayristir(const bellek_t *bellek, kelime_t adres, char *cikt
             case KMT_YUKLE_INDEKS_X_T:
                 snprintf(cikti_tamponu, tampon_boyutu, "[0x%04X + X] T YÜKLE", hedef);
                 break;
+            case KMT_YUKLE_INDEKS_Y_T:
+                snprintf(cikti_tamponu, tampon_boyutu, "[0x%04X + Y] T YÜKLE", hedef);
+                break;
             case KMT_SAKLA_T_ADRES:
                 snprintf(cikti_tamponu, tampon_boyutu, "T [0x%04X] SAKLA", hedef);
                 break;
             case KMT_SAKLA_T_INDEKS_X:
                 snprintf(cikti_tamponu, tampon_boyutu, "T [0x%04X + X] SAKLA", hedef);
+                break;
+            case KMT_SAKLA_T_INDEKS_Y:
+                snprintf(cikti_tamponu, tampon_boyutu, "T [0x%04X + Y] SAKLA", hedef);
+                break;
+            case KMT_YUKLE_DOLAYLI_Y_T:
+                snprintf(cikti_tamponu, tampon_boyutu, "[[0x%04X] + Y] T YÜKLE", hedef);
+                break;
+            case KMT_SAKLA_T_DOLAYLI_Y:
+                snprintf(cikti_tamponu, tampon_boyutu, "T [[0x%04X] + Y] SAKLA", hedef);
                 break;
             case KMT_SAKLA_X_ADRES:
                 snprintf(cikti_tamponu, tampon_boyutu, "X [0x%04X] SAKLA", hedef);
@@ -116,6 +146,21 @@ int ayiklayici_komut_ayristir(const bellek_t *bellek, kelime_t adres, char *cikt
                 break;
             case KMT_CIKAR_ADRES:
                 snprintf(cikti_tamponu, tampon_boyutu, "[0x%04X] ÇIKAR", hedef);
+                break;
+            case KMT_KARSILASTIR_ADRES:
+                snprintf(cikti_tamponu, tampon_boyutu, "[0x%04X] KARŞILAŞTIR", hedef);
+                break;
+            case KMT_ARTIR_ADRES:
+                snprintf(cikti_tamponu, tampon_boyutu, "[0x%04X] ARTIR", hedef);
+                break;
+            case KMT_AZALT_ADRES:
+                snprintf(cikti_tamponu, tampon_boyutu, "[0x%04X] AZALT", hedef);
+                break;
+            case KMT_VE_ADRES:
+                snprintf(cikti_tamponu, tampon_boyutu, "[0x%04X] VE", hedef);
+                break;
+            case KMT_VEYA_ADRES:
+                snprintf(cikti_tamponu, tampon_boyutu, "[0x%04X] VEYA", hedef);
                 break;
             case KMT_ATLA:
                 snprintf(cikti_tamponu, tampon_boyutu, "0x%04X ATLA", hedef);
@@ -134,6 +179,27 @@ int ayiklayici_komut_ayristir(const bellek_t *bellek, kelime_t adres, char *cikt
                 break;
             case KMT_ELDE_VARSA_ATLA:
                 snprintf(cikti_tamponu, tampon_boyutu, "0x%04X ELDE VARSA ATLA", hedef);
+                break;
+            case KMT_ELDE_YOKSA_ATLA:
+                snprintf(cikti_tamponu, tampon_boyutu, "0x%04X ELDE YOKSA ATLA", hedef);
+                break;
+            case KMT_NEGATIFSE_ATLA:
+                snprintf(cikti_tamponu, tampon_boyutu, "0x%04X NEGATİFSE ATLA", hedef);
+                break;
+            case KMT_POZITIFSE_ATLA:
+                snprintf(cikti_tamponu, tampon_boyutu, "0x%04X POZİTİFSE ATLA", hedef);
+                break;
+            case KMT_TASMA_VARSA_ATLA:
+                snprintf(cikti_tamponu, tampon_boyutu, "0x%04X TAŞMA VARSA ATLA", hedef);
+                break;
+            case KMT_KUCUK_ESITSE_ATLA:
+                snprintf(cikti_tamponu, tampon_boyutu, "0x%04X KÜÇÜK VEYA EŞİTSE ATLA", hedef);
+                break;
+            case KMT_ATLA_DOLAYLI:
+                snprintf(cikti_tamponu, tampon_boyutu, "[0x%04X] ATLA", hedef);
+                break;
+            case KMT_CAGIR_DOLAYLI:
+                snprintf(cikti_tamponu, tampon_boyutu, "[0x%04X] ÇAĞIR", hedef);
                 break;
             case KMT_CAGIR:
                 snprintf(cikti_tamponu, tampon_boyutu, "0x%04X ÇAĞIR", hedef);

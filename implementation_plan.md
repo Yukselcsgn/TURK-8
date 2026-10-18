@@ -7,7 +7,7 @@ Hedef: `./turk8` yazınca makine **kendi ROM'undan açılsın**, ekranda imleç 
 
 ```mermaid
 flowchart LR
-    F0["Faz 0: Hijyen + test altyapısı (Tamamlandı)"] --> F1["Faz 1: ISA v1.0 dondur"]
+    F0["Faz 0: Hijyen + test altyapısı ✅"] --> F1["Faz 1: ISA v1.0 dondur ✅"]
     F1 --> F2["Faz 2: Donanım"]
     F2 --> F3["Faz 3: BIOS ROM + açılış"]
     F3 --> F4["Faz 4: Kabuk"]
@@ -94,10 +94,10 @@ Her faz **test geçmeden commit edilmez**. Test altyapısı Faz 0'da kurulur: `0
 - [x] Derleyiciyi **tablo tabanlı** yeniden yaz (`araclar/isa.py` tek kaynak; boyut tahmini hilesi kalkar). Mevcut tüm `.asm` programları aynı baytları üretmeli (regresyon testi).
 - [x] `tests/` + `make test` iskeleti (`tests/yardimci.py`, `tests/test_faz0.py`). Doğrulama: mevcut programların çıktıları aynı.
 
-### Faz 1 — ISA v1.0 (son işlemci değişikliği)
-- [ ] Bölüm 2'deki komutlar + `BÜYÜKSE`/`KÜÇÜKSE` düzeltmesi + taşma bayrağı.
-- [ ] **Her komut için en az bir test** (bayraklar dahil, sınır değerleri 0/127/128/255).
-- [ ] Ayıklayıcı (disassembler) ve komut tablosu güncellenir. Doğrulama: tüm testler yeşil.
+### Faz 1 — ISA v1.0 (son işlemci değişikliği — Tamamlandı ✅)
+- [x] Bölüm 2'deki komutlar (toplam 91 komut) + `BÜYÜKSE`/`KÜÇÜKSE` düzeltmesi + taşma bayrağı.
+- [x] **Her komut için en az bir test** (`tests/test_faz1_isa.py`, bayraklar dahil, sınır değerleri 0/127/128/255).
+- [x] Ayıklayıcı (disassembler) ve komut tablosu güncellendi. Doğrulama: tüm testler yeşil.
 
 ### Faz 2 — Donanım
 - [ ] **Gerçek 50 Hz zamanlayıcı kesmesi** (`0xFFFE` vektörü), `KARE BEKLE` ile uyum.
@@ -145,3 +145,4 @@ Her faz **test geçmeden commit edilmez**. Test altyapısı Faz 0'da kurulur: `0
 - En riskli parçalar: dahili assembler (Faz 6c) ve BASIC (Faz 7); bunlar ROM içinde assembly ile yazıldığı için en uzun işler.
 - Hata ayıklama yükü büyük: bu yüzden test altyapısı en başta (Faz 0).
 - Faz 1'den sonra işlemci değişmez; eksik çıkarsa tek istisna "hata düzeltmesi" olur.
+

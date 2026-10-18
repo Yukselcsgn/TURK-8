@@ -21,6 +21,12 @@ typedef int8_t    isaretli_bayt_t;  /* İşaretli 8-bit (-128 ile +127) */
 #define BELLEK_BOYUTU       65536     /* 64 Kilobayt */
 
 #define ADRES_SIFIR_SAYFA   0x0000    /* 0x0000 - 0x00FF: Hızlı Sıfır Sayfa (Zero Page) */
+#define ADRES_BLOK_KAYNAK   0x0000    /* KOPYALA kaynak adresi (16-bit: 0x0000-0x0001) */
+#define ADRES_BLOK_HEDEF    0x0002    /* KOPYALA/DOLDUR hedef adresi (16-bit: 0x0002-0x0003) */
+#define ADRES_BLOK_UZUNLUK  0x0004    /* KOPYALA/DOLDUR uzunluk (16-bit: 0x0004-0x0005) */
+#define ADRES_SISTEM_NO     0x00FA    /* <n> SİSTEM çağrısının servis numarası (1 bayt) */
+#define ADRES_SISTEM_VEKTOR 0x00FC    /* RAM yazılım kesmesi vektörü (16-bit: 0x00FC-0x00FD) */
+#define ADRES_KESME_VEKTOR  0x00FE    /* RAM donanım kesmesi vektörü (16-bit: 0x00FE-0x00FF) */
 #define ADRES_YIGIN_TABANI  0x0100    /* 0x0100 - 0x01FF: Yığın (Stack - 256 bayt) */
 #define ADRES_RAM_BAS       0x0200    /* 0x0200 - 0x7FFF: Genel Kullanıcı Belleği */
 #define ADRES_VRAM_BAS      0x8000    /* 0x8000 - 0x83E7: Ekran Belleği (40x25 = 1000 karakter) */
@@ -31,13 +37,14 @@ typedef int8_t    isaretli_bayt_t;  /* İşaretli 8-bit (-128 ile +127) */
 #define ADRES_GIRIS_CIKIS   0xA000    /* 0xA000 - 0xA0FF: Bellek Haritalı Giriş/Çıkış (MMIO) */
 #define PORT_KLAVYE_VERI    0xA000    /* Okunan son tuş */
 #define PORT_KLAVYE_DURUM   0xA001    /* 1: Yeni tuş var, 0: Yok */
-#define PORT_ZAMANLAYICI    0xA002    /* Milisaniye sayacı */
+#define PORT_ZAMANLAYICI    0xA002    /* 50 Hz kare sayacı */
 #define PORT_TERMINAL_YAZ   0xA003    /* Standart çıktıya bayt basar */
 #define PORT_TEST_SONUC     0xA0FF    /* Test modu: 1 yazılırsa BAŞARILI, başka değer hata kodu; yazılınca çalışma biter */
 
 #define ADRES_ROM_BAS       0xC000    /* 0xC000 - 0xFFFF: Kalıcı Sistem ROM / BIOS (16 KB) */
-#define VEKTOR_KESME        0xFFFE    /* Donanım kesmesi atlama adresi */
+#define VEKTOR_SISTEM       0xFFFA    /* Yazılım kesmesi (<n> SİSTEM) atlama adresi */
 #define VEKTOR_SIFIRLA      0xFFFC    /* Açılışta Program Sayacının (PS) ilk adresi */
+#define VEKTOR_KESME        0xFFFE    /* Donanım kesmesi atlama adresi */
 
 #endif /* TURK8_TANIMLAR_H */
 

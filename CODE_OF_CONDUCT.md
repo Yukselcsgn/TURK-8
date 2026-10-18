@@ -109,3 +109,4 @@ hızlı ve adil bir şekilde incelenecektir.
 ---
 
 *Adapted from the [Contributor Covenant](https://www.contributor-covenant.org), version 2.1.*
+

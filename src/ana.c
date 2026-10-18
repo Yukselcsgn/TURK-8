@@ -78,6 +78,10 @@ static int test_modu_calistir(islemci_t *islemci, bellek_t *bellek,
 
     while (!islemci->durdu && !bellek->test_sonuc_var && islemci->toplam_cevrim < max_cevrim) {
         islemci_tek_adim(islemci);
+        if (islemci->kare_bekliyor) {
+            bellek->zamanlayici_sayaci++;
+            islemci->kare_bekliyor = false;
+        }
     }
 
     if (bellek->test_sonuc_var) {
@@ -226,6 +230,10 @@ int main(int argc, char *argv[]) {
         printf("[SİSTEM] TÜRK-8 çalışmaya başladı...\n");
         while (!islemci.durdu) {
             islemci_tek_adim(&islemci);
+            if (islemci.kare_bekliyor) {
+                bellek.zamanlayici_sayaci++;
+                islemci.kare_bekliyor = false;
+            }
         }
         printf("\n[SİSTEM] İşlemci DURDU. Toplam Çevrim: %llu\n", (unsigned long long)islemci.toplam_cevrim);
 

@@ -5,7 +5,7 @@
 #include "bellek.h"
 #include "komutlar.h"
 
-/* TÜRK-8 Merkezi İşlem Birimi (MİB / CPU) */
+/* TÜRK-8 Merkezi İşlem Birimi (MİB / CPU) — ISA v1.0 */
 typedef struct {
     /* Yazmaçlar (Registers) */
     bayt_t    T;       /* Toplaç (Akümülatör - A) */
@@ -18,6 +18,8 @@ typedef struct {
     /* İşlemci Durumu */
     bool      durdu;          /* true ise işlemci DUR komutuyla durmuştur */
     bool      hata;           /* true ise bilinmeyen işlem koduyla durmuştur */
+    bool      kare_bekliyor;  /* true ise KARE BEKLE komutuyla sonraki 50 Hz kareyi bekliyor */
+    uint16_t  rng_durum;      /* Donanım rastgele sayı üreteci (LFSR) durumu */
     uint64_t  toplam_cevrim;  /* Toplam saat vuruşu sayısı */
 
     /* Veri Yolu (Bağlı 64 KB Bellek) */
@@ -47,4 +49,3 @@ kelime_t islemci_yigindan_cek_kelime(islemci_t *islemci);
 void   islemci_durum_yazdir(const islemci_t *islemci);
 
 #endif /* ISLEMCI_H */
-

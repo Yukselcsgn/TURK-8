@@ -94,3 +94,4 @@ Kod göndermeden önce TÜRK-8'in temel tasarım ilkelerini göz önünde bulund
 2. Değişikliklerinizi yapın ve `make clean && make test` komutunun temiz geçtiğini doğrulayın.
 3. Kullanıcıya dönük bir değişiklik yaptıysanız Türkçe ve İngilizce kılavuzları güncelleyin.
 4. Açıklayıcı bir commit mesajıyla değişikliklerinizi kaydedip `main` dalına Pull Request açın.
+
