@@ -2,16 +2,13 @@
 #include <stdlib.h>
 #include <string.h>
 #include "bellek.h"
+#include "ekran.h"
 
 void bellek_olustur(bellek_t *bellek) {
     if (!bellek) return;
-    memset(bellek->veri, 0, sizeof(bellek->veri));
+    memset(bellek, 0, sizeof(bellek_t));
     bellek->rom_yazma_korumali = true;
-    bellek->klavye_tamponu = 0;
-    bellek->klavye_hazir = false;
-    bellek->zamanlayici_sayaci = 0;
-    bellek->test_sonuc_var = false;
-    bellek->test_sonuc = 0;
+    bellek->donanim_rng = 0xBEEFu;
 }
 
 void bellek_sifirla(bellek_t *bellek) {
@@ -22,16 +19,54 @@ bayt_t bellek_oku(bellek_t *bellek, kelime_t adres) {
     if (!bellek) return 0;
 
     /* Giriş/Çıkış Portları (MMIO: 0xA000 - 0xA0FF) */
-    if (adres == PORT_KLAVYE_VERI) {
-        bayt_t tus = bellek->klavye_tamponu;
-        bellek->klavye_hazir = false; /* Okununca bayrağı sıfırla */
-        return tus;
-    }
-    if (adres == PORT_KLAVYE_DURUM) {
-        return bellek->klavye_hazir ? 1 : 0;
-    }
-    if (adres == PORT_ZAMANLAYICI) {
-        return bellek->zamanlayici_sayaci;
+    switch (adres) {
+        case PORT_KLAVYE_VERI: {
+            if (bellek->klavye_sayi == 0) {
+                return 0;
+            }
+            bayt_t tus = bellek->klavye_fifo[bellek->klavye_bas];
+            bellek->klavye_bas = (uint8_t)((bellek->klavye_bas + 1) % KLAVYE_FIFO_BOYUTU);
+            bellek->klavye_sayi--;
+            bellek->klavye_hazir = (bellek->klavye_sayi > 0);
+            bellek->klavye_tamponu = bellek->klavye_hazir
+                ? bellek->klavye_fifo[bellek->klavye_bas]
+                : 0;
+            return tus;
+        }
+        case PORT_KLAVYE_DURUM:
+            return (bellek->klavye_sayi > 0) ? 1 : 0;
+
+        case PORT_ZAMANLAYICI:
+            return bellek->zamanlayici_sayaci;
+
+        case PORT_SES_FREKANS:
+            return bellek->ses_frekans;
+
+        case PORT_SES_SURE:
+            return bellek->ses_sure;
+
+        case PORT_RASTGELE: {
+            uint16_t x = bellek->donanim_rng;
+            if (x == 0) x = 0xBEEFu;
+            x ^= (uint16_t)(x << 7);
+            x ^= (uint16_t)(x >> 9);
+            x ^= (uint16_t)(x << 8);
+            bellek->donanim_rng = x;
+            return (bayt_t)((x ^ (x >> 8) ^ bellek->zamanlayici_sayaci) & 0xFF);
+        }
+
+        /* Sanal Disk Denetleyici Port Alanı (0xA010 - 0xA017) */
+        case PORT_DISK_KOMUT:     return bellek->disk_komut;
+        case PORT_DISK_DURUM:     return bellek->disk_durum;
+        case PORT_DISK_SEKTOR:    return bellek->disk_sektor;
+        case PORT_DISK_ADRES_ALT: return bellek->disk_adres_alt;
+        case PORT_DISK_ADRES_UST: return bellek->disk_adres_ust;
+        case PORT_DISK_SAYI:      return bellek->disk_sayi;
+        case PORT_DISK_HATA:      return bellek->disk_hata;
+        case PORT_DISK_VERI:      return bellek->disk_veri;
+
+        default:
+            break;
     }
 
     return bellek->veri[adres];
@@ -47,16 +82,66 @@ void bellek_yaz(bellek_t *bellek, kelime_t adres, bayt_t deger) {
     }
 
     /* Giriş/Çıkış Portları (MMIO) */
-    if (adres == PORT_TERMINAL_YAZ) {
-        /* Doğrudan terminal konsoluna karakter bas */
-        putchar(deger);
-        fflush(stdout);
-        return;
-    }
-    if (adres == PORT_TEST_SONUC) {
-        bellek->test_sonuc = deger;
-        bellek->test_sonuc_var = true;
-        return;
+    switch (adres) {
+        case PORT_TERMINAL_YAZ: {
+            /* Doğrudan terminal konsoluna karakter bas (ISO-8859-9 Türkçe destekli) */
+            const char *utf8 = ekran_bayt_utf8_karsiligi(deger);
+            if (utf8) {
+                fputs(utf8, stdout);
+            } else {
+                putchar(deger);
+            }
+            fflush(stdout);
+            return;
+        }
+
+        case PORT_SES_FREKANS:
+            bellek->ses_frekans = deger;
+            return;
+
+        case PORT_SES_SURE:
+            bellek->ses_sure = deger;
+            if (deger > 0 && bellek->ses_frekans > 0) {
+                bellek->ses_calma_sayisi++;
+                if (!bellek->sessiz_mod) {
+                    putchar('\a');
+                    fflush(stdout);
+                }
+            }
+            return;
+
+        case PORT_DISK_KOMUT:
+            bellek->disk_komut = deger;
+            return;
+        case PORT_DISK_DURUM:
+            bellek->disk_durum = deger;
+            return;
+        case PORT_DISK_SEKTOR:
+            bellek->disk_sektor = deger;
+            return;
+        case PORT_DISK_ADRES_ALT:
+            bellek->disk_adres_alt = deger;
+            return;
+        case PORT_DISK_ADRES_UST:
+            bellek->disk_adres_ust = deger;
+            return;
+        case PORT_DISK_SAYI:
+            bellek->disk_sayi = deger;
+            return;
+        case PORT_DISK_HATA:
+            bellek->disk_hata = deger;
+            return;
+        case PORT_DISK_VERI:
+            bellek->disk_veri = deger;
+            return;
+
+        case PORT_TEST_SONUC:
+            bellek->test_sonuc = deger;
+            bellek->test_sonuc_var = true;
+            return;
+
+        default:
+            break;
     }
 
     bellek->veri[adres] = deger;
@@ -104,8 +189,16 @@ bool bellek_yukle_ikili(bellek_t *bellek, kelime_t baslangic_adresi, const char 
 
 void bellek_klavye_tusu_gonder(bellek_t *bellek, bayt_t tus) {
     if (!bellek) return;
-    bellek->klavye_tamponu = tus;
+    if (bellek->klavye_sayi >= KLAVYE_FIFO_BOYUTU) {
+        /* 16 baytlık FIFO dolu: mevcut kuyruğu bozmadan taşma bayrağını işaretle */
+        bellek->klavye_tasti = true;
+        return;
+    }
+    bellek->klavye_fifo[bellek->klavye_son] = tus;
+    bellek->klavye_son = (uint8_t)((bellek->klavye_son + 1) % KLAVYE_FIFO_BOYUTU);
+    bellek->klavye_sayi++;
     bellek->klavye_hazir = true;
+    bellek->klavye_tamponu = bellek->klavye_fifo[bellek->klavye_bas];
 }
 
 void bellek_dokum_yazdir(const bellek_t *bellek, kelime_t baslangic, kelime_t uzunluk) {
@@ -139,4 +232,3 @@ void bellek_dokum_yazdir(const bellek_t *bellek, kelime_t baslangic, kelime_t uz
         printf("|\n");
     }
 }
-

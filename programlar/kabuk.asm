@@ -85,10 +85,10 @@ sil_basildi:
     klavye_dongusu ATLA
 
 baslik:
-    .METİN "=== TURK-8 CANLI KABUK (KLAVYE AKTIF) ==="
+    .METİN "== TÜRK-8 CANLI KABUK (KLAVYE AKTİF) ==="
     .BAYT 0
 
 cizgi:
-    .METİN "Yazi yazabilirsiniz (Cikis icin ESC)   "
+    .METİN "Yazı yazabilirsiniz (Çıkış için ESC)   "
     .BAYT 0
 

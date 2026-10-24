@@ -22,6 +22,72 @@
 static bool g_terminal_degisti = false;
 static volatile bool g_canli_calisiyor = false;
 
+/* ISO-8859-9 (Latin-5) 8-bit Türkçe karakter kodlarını UTF-8 dizgesine çevirir.
+ * Tanınmayan veya kontrol karakterleri için NULL döner. */
+const char* ekran_bayt_utf8_karsiligi(bayt_t c) {
+    switch (c) {
+        case 0xC7: return "\xC3\x87"; /* Ç */
+        case 0xE7: return "\xC3\xA7"; /* ç */
+        case 0xD0: return "\xC4\x9E"; /* Ğ */
+        case 0xF0: return "\xC4\x9F"; /* ğ */
+        case 0xDD: return "\xC4\xB0"; /* İ */
+        case 0xFD: return "\xC4\xB1"; /* ı */
+        case 0xD6: return "\xC3\x96"; /* Ö */
+        case 0xF6: return "\xC3\xB6"; /* ö */
+        case 0xDE: return "\xC5\x9E"; /* Ş */
+        case 0xFE: return "\xC5\x9F"; /* ş */
+        case 0xDC: return "\xC3\x9C"; /* Ü */
+        case 0xFC: return "\xC3\xBC"; /* ü */
+        default:   return NULL;
+    }
+}
+
+/* 2 baytlık UTF-8 Türkçe karakter dizisini (0xC3/0xC4/0xC5 + ikinci bayt)
+ * tek baytlık ISO-8859-9 (Latin-5) TÜRK-8 karakter koduna çevirir. */
+bayt_t ekran_utf8_bayta_cevir(bayt_t ilk, bayt_t ikinci) {
+    if (ilk == 0xC3) {
+        switch (ikinci) {
+            case 0x87: return 0xC7; /* Ç */
+            case 0xA7: return 0xE7; /* ç */
+            case 0x96: return 0xD6; /* Ö */
+            case 0xB6: return 0xF6; /* ö */
+            case 0x9C: return 0xDC; /* Ü */
+            case 0xBC: return 0xFC; /* ü */
+            default:   break;
+        }
+    } else if (ilk == 0xC4) {
+        switch (ikinci) {
+            case 0x9E: return 0xD0; /* Ğ */
+            case 0x9F: return 0xF0; /* ğ */
+            case 0xB0: return 0xDD; /* İ */
+            case 0xB1: return 0xFD; /* ı */
+            default:   break;
+        }
+    } else if (ilk == 0xC5) {
+        switch (ikinci) {
+            case 0x9E: return 0xDE; /* Ş */
+            case 0x9F: return 0xFE; /* ş */
+            default:   break;
+        }
+    }
+    return 0;
+}
+
+static void vram_hucre_yazdir(bayt_t c) {
+    if (c >= 32 && c <= 126) {
+        putchar(c);
+    } else if (c == 0) {
+        putchar(' ');
+    } else {
+        const char *utf8 = ekran_bayt_utf8_karsiligi(c);
+        if (utf8) {
+            fputs(utf8, stdout);
+        } else {
+            putchar('.');
+        }
+    }
+}
+
 static void terminal_eski_hale_getir(void) {
     if (g_terminal_degisti) {
 #ifdef _WIN32
@@ -75,15 +141,26 @@ void ekran_metin_dokum(const bellek_t *bellek, const char *onek) {
     if (!onek) onek = "";
 
     for (int y = 0; y < EKRAN_YUKSEKLIK; y++) {
-        char satir[EKRAN_GENISLIK + 1];
-        int uzunluk = 0;
+        int son_dolu = -1;
         for (int x = 0; x < EKRAN_GENISLIK; x++) {
             bayt_t c = bellek->veri[ADRES_VRAM_BAS + y * EKRAN_GENISLIK + x];
-            satir[x] = (c >= 32 && c <= 126) ? (char)c : ' ';
-            if (satir[x] != ' ') uzunluk = x + 1;
+            if ((c > 32 && c <= 126) || ekran_bayt_utf8_karsiligi(c) != NULL) {
+                son_dolu = x;
+            }
         }
-        satir[uzunluk] = '\0';
-        printf("%s%s\n", onek, satir);
+        printf("%s", onek);
+        for (int x = 0; x <= son_dolu; x++) {
+            bayt_t c = bellek->veri[ADRES_VRAM_BAS + y * EKRAN_GENISLIK + x];
+            const char *utf8 = ekran_bayt_utf8_karsiligi(c);
+            if (utf8) {
+                fputs(utf8, stdout);
+            } else if (c >= 32 && c <= 126) {
+                putchar(c);
+            } else {
+                putchar(' ');
+            }
+        }
+        printf("\n");
     }
 }
 
@@ -100,14 +177,7 @@ void ekran_ciz(const bellek_t *bellek) {
         printf("║");
         for (int x = 0; x < EKRAN_GENISLIK; x++) {
             kelime_t ofset = (kelime_t)(y * EKRAN_GENISLIK + x);
-            bayt_t c = bellek->veri[ADRES_VRAM_BAS + ofset];
-            if (c >= 32 && c <= 126) {
-                putchar(c);
-            } else if (c == 0) {
-                putchar(' ');
-            } else {
-                putchar('.');
-            }
+            vram_hucre_yazdir(bellek->veri[ADRES_VRAM_BAS + ofset]);
         }
         printf("║\n");
     }
@@ -126,14 +196,7 @@ static void canli_arayuz_ciz(const islemci_t *islemci, const bellek_t *bellek) {
         printf("║");
         for (int x = 0; x < EKRAN_GENISLIK; x++) {
             kelime_t ofset = (kelime_t)(y * EKRAN_GENISLIK + x);
-            bayt_t c = bellek->veri[ADRES_VRAM_BAS + ofset];
-            if (c >= 32 && c <= 126) {
-                putchar(c);
-            } else if (c == 0) {
-                putchar(' ');
-            } else {
-                putchar('.');
-            }
+            vram_hucre_yazdir(bellek->veri[ADRES_VRAM_BAS + ofset]);
         }
         printf("║\n");
     }
@@ -163,6 +226,8 @@ void ekran_canli_mod_baslat(void *islemci_ptr, bellek_t *bellek) {
     DWORD yeni_out = g_eski_out_mode | ENABLE_VIRTUAL_TERMINAL_PROCESSING;
     SetConsoleMode(hIn, yeni_in);
     SetConsoleMode(hOut, yeni_out);
+    SetConsoleModeCP(CP_UTF8);
+    SetConsoleOutputCP(CP_UTF8);
     g_terminal_degisti = true;
 #else
     if (tcgetattr(STDIN_FILENO, &g_eski_termios) == 0) {
@@ -186,38 +251,58 @@ void ekran_canli_mod_baslat(void *islemci_ptr, bellek_t *bellek) {
     g_canli_calisiyor = true;
 
     while (g_canli_calisiyor) {
-        /* 1. Klavyeden tuş kontrolü (non-blocking) */
+        /* 1. Klavyeden tuş kontrolü (non-blocking, UTF-8 Türkçe -> 8-bit ISO-8859-9) */
+        bool cikis_istendi = false;
 #ifdef _WIN32
-        if (_kbhit()) {
-            char tus = (char)_getch();
-            if (tus == 27) break;
-            if (tus == '\r') tus = '\n';
-            bellek_klavye_tusu_gonder(bellek, (bayt_t)tus);
-        }
-#else
-        char tus = 0;
-        if (read(STDIN_FILENO, &tus, 1) > 0) {
-            if (tus == 27) { /* ESC */
+        while (_kbhit()) {
+            bayt_t tus = (bayt_t)_getch();
+            if (tus == 27) {
+                cikis_istendi = true;
                 break;
             }
             if (tus == '\r') tus = '\n';
-            bellek_klavye_tusu_gonder(bellek, (bayt_t)tus);
+            if ((tus == 0xC3 || tus == 0xC4 || tus == 0xC5) && _kbhit()) {
+                bayt_t ikinci = (bayt_t)_getch();
+                bayt_t tr = ekran_utf8_bayta_cevir(tus, ikinci);
+                if (tr != 0) tus = tr;
+            }
+            bellek_klavye_tusu_gonder(bellek, tus);
+        }
+#else
+        bayt_t tus = 0;
+        while (read(STDIN_FILENO, &tus, 1) > 0) {
+            if (tus == 27) { /* ESC */
+                cikis_istendi = true;
+                break;
+            }
+            if (tus == '\r') tus = '\n';
+            /* 2 baytlık UTF-8 Türkçe karakter başlangıcı mı? */
+            if (tus == 0xC3 || tus == 0xC4 || tus == 0xC5) {
+                bayt_t ikinci = 0;
+                if (read(STDIN_FILENO, &ikinci, 1) > 0) {
+                    bayt_t tr = ekran_utf8_bayta_cevir(tus, ikinci);
+                    if (tr != 0) {
+                        tus = tr;
+                    }
+                }
+            }
+            bellek_klavye_tusu_gonder(bellek, tus);
         }
 #endif
+        if (cikis_istendi) break;
 
-        /* Donanım 50 Hz Zamanlayıcısını (Timer) her karede 1 artır */
-        bellek->zamanlayici_sayaci++;
-        islemci->kare_bekliyor = false;
+        /* 2. Donanım 50 Hz Zamanlayıcı Tiki ve Kesmesi */
+        islemci_kare_bildir(islemci);
 
-        /* 2. İşlemciyi çalıştır (Her karede en çok 500 komut veya KARE BEKLE'ye kadar) */
-        for (int i = 0; i < 500 && !islemci->durdu && !islemci->kare_bekliyor; i++) {
+        /* 3. İşlemciyi çalıştır (Her karede en çok 500 komut veya KARE BEKLE'ye kadar) */
+        for (int i = 0; i < CEVRIM_50HZ_KARE && !islemci->durdu && !islemci->kare_bekliyor; i++) {
             islemci_tek_adim(islemci);
         }
 
-        /* 3. Ekranı yenile */
+        /* 4. Ekranı yenile */
         canli_arayuz_ciz(islemci, bellek);
 
-        /* 4. ~50 FPS için 20 ms bekle */
+        /* 5. ~50 FPS için 20 ms bekle */
         BEKLE_MS(20);
     }
 

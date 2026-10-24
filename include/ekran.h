@@ -6,6 +6,10 @@
 
 struct islemci_t;
 
+/* TÜRK-8 8-Bit Türkçe Karakter Dönüşümü (ISO-8859-9 / Latin-5 <-> UTF-8) */
+const char* ekran_bayt_utf8_karsiligi(bayt_t c);
+bayt_t      ekran_utf8_bayta_cevir(bayt_t ilk, bayt_t ikinci);
+
 /* VRAM Ekran Yönetimi */
 void ekran_temizle(bellek_t *bellek);
 void ekran_karakter_koy(bellek_t *bellek, uint8_t x, uint8_t y, char karakter);

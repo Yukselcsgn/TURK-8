@@ -94,6 +94,17 @@ def virgulle_ayir(metin):
 _KACIS = {"n": 10, "t": 9, "r": 13, "0": 0, "\\": 92, '"': 34, "'": 39}
 
 
+def _karakter_kodu(c):
+    """Tek bir karakteri 8-bit ISO-8859-9 (Latin-5 Türkçe) bayt değerine çevirir."""
+    try:
+        return c.encode("iso-8859-9")[0]
+    except UnicodeEncodeError:
+        kod = ord(c)
+        if kod <= 255:
+            return kod
+        raise _SatirHatasi("karakter 8 bite (ISO-8859-9) sığmıyor: '%s'" % c)
+
+
 def dizge_coz(metin):
     """"..." biçimli dizgeyi bayt listesine çevirir."""
     metin = metin.strip()
@@ -110,10 +121,7 @@ def dizge_coz(metin):
                 raise _SatirHatasi("geçersiz kaçış dizisi: \\%s" % (iclerik[i:i + 1],))
             baytlar.append(_KACIS[iclerik[i]])
         else:
-            kod = ord(c)
-            if kod > 255:
-                raise _SatirHatasi("karakter 8 bite sığmıyor: '%s'" % c)
-            baytlar.append(kod)
+            baytlar.append(_karakter_kodu(c))
         i += 1
     return baytlar
 
@@ -124,7 +132,7 @@ def sayi_coz(metin, semboller):
     if m.startswith("#"):
         m = m[1:].strip()
     if len(m) == 3 and m[0] == "'" and m[2] == "'":
-        return ord(m[1])
+        return _karakter_kodu(m[1])
     try:
         alt = m.lower()
         if alt.startswith("0x"):

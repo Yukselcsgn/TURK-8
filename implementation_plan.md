@@ -8,7 +8,7 @@ Hedef: `./turk8` yazınca makine **kendi ROM'undan açılsın**, ekranda imleç 
 ```mermaid
 flowchart LR
     F0["Faz 0: Hijyen + test altyapısı ✅"] --> F1["Faz 1: ISA v1.0 dondur ✅"]
-    F1 --> F2["Faz 2: Donanım"]
+    F1 --> F2["Faz 2: Donanım ✅"]
     F2 --> F3["Faz 3: BIOS ROM + açılış"]
     F3 --> F4["Faz 4: Kabuk"]
     F4 --> F5["Faz 5: Sanal disk"]
@@ -99,12 +99,12 @@ Her faz **test geçmeden commit edilmez**. Test altyapısı Faz 0'da kurulur: `0
 - [x] **Her komut için en az bir test** (`tests/test_faz1_isa.py`, bayraklar dahil, sınır değerleri 0/127/128/255).
 - [x] Ayıklayıcı (disassembler) ve komut tablosu güncellendi. Doğrulama: tüm testler yeşil.
 
-### Faz 2 — Donanım
-- [ ] **Gerçek 50 Hz zamanlayıcı kesmesi** (`0xFFFE` vektörü), `KARE BEKLE` ile uyum.
-- [ ] Klavye: tek bayt yerine **16 baytlık FIFO tampon**.
-- [ ] **Ses portu** (`0xA004` frekans, `0xA005` süre). Varsayılan terminal zili (`BEL`).
-- [ ] Rastgele sayı üreteci, disk denetleyici port alanı (`0xA010–0xA017`) ayrılır.
-- [ ] Doğrulama: kesme, FIFO taşması, RNG dağılımı testleri; Pong'u `KARE BEKLE` ile CPU yakmadan çalıştır.
+### Faz 2 — Donanım (Tamamlandı ✅)
+- [x] **Gerçek 50 Hz zamanlayıcı kesmesi** (`0xFFFE` / RAM `0x00FE` vektörü), `KARE BEKLE` ile uyum (`islemci_kare_bildir`).
+- [x] Klavye: tek bayt yerine **16 baytlık FIFO tampon** ve taşma bayrağı (`klavye_tasti`).
+- [x] **Ses portu** (`0xA004` frekans, `0xA005` süre). Varsayılan terminal zili (`BEL`), test kipinde sessiz mod.
+- [x] Rastgele sayı üreteci portu (`0xA006`), disk denetleyici port alanı (`0xA010–0xA017`) ayrıldı.
+- [x] Doğrulama: kesme, FIFO taşması, RNG dağılımı testleri (`tests/test_faz2_donanim.py`); Pong (`programlar/pong.asm`) `KARE BEKLE`, `T RAKAMLARA AYIR` ve ses portu ile güncellendi.
 
 ### Faz 3 — BIOS ROM ve açılış
 - [ ] `roms/bios.asm` → `0xC000`: sıfırlama vektörü, bellek testi, açılış başlığı ("TÜRK-8 ... 31 KB SERBEST"), imleç.

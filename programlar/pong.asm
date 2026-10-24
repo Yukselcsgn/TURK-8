@@ -48,10 +48,13 @@ sag_duvar_dongu:
     [satir_adresleri_ust + X] T YÜKLE
     T [cizim_adresi_ust] SAKLA
 
-    ; 38. sütunu ekle
+    ; 38. sütunu ekle (sayfa sınırını aşarsa üst bayta elde ekle)
     38 T YÜKLE
     [cizim_adresi_alt] TOPLA
     T [cizim_adresi_alt] SAKLA
+    [cizim_adresi_ust] T YÜKLE
+    0 ELDEYLE TOPLA
+    T [cizim_adresi_ust] SAKLA
 
     124 T YÜKLE ; '|' karakteri
     T [[cizim_adresi_alt]] SAKLA
@@ -118,19 +121,12 @@ asagi_hareket:
     klavye_bitti ATLA
 
 klavye_bitti:
-    ; --- DONANIM ZAMANLAYICISI (50 Hz / 20ms) KONTROLÜ ---
-    [0xA002] T YÜKLE
-    [son_zaman] ÇIKAR
-    0 KARŞILAŞTIR
-    ana_oyun_dongusu EŞİTSE ATLA ; Zaman henüz değişmediyse (fark == 0) bekle
+    ; --- DONANIM ZAMANLAYICISI (50 Hz / 20ms) SENKRONU ---
+    ; İşlemciyi bir sonraki 50 Hz kareye kadar uyut (%100 CPU kullanımını önler)
+    KARE BEKLE
 
-    ; Zaman ilerledi (1 kare = 20ms geçti)
-    [0xA002] T YÜKLE
-    T [son_zaman] SAKLA
-
+    [kare_sayaci] ARTIR
     [kare_sayaci] T YÜKLE
-    T ARTIR
-    T [kare_sayaci] SAKLA
     6 KARŞILAŞTIR ; 6 kare = 120ms (Saniyede ~8 adım, tam nostaljik Pong hızı!)
     ana_oyun_dongusu KÜÇÜKSE ATLA
 
@@ -243,10 +239,14 @@ raketten_sek:
     1 T YÜKLE
     T [top_hiz_x] SAKLA ; Sağa sek
 
+    ; Raket vuruş sesi çal (Port 4: Frekans, Port 5: Süre)
+    120 T YÜKLE
+    4 ÇIKIŞ
+    2 T YÜKLE
+    5 ÇIKIŞ
+
     ; Skoru 1 artır
-    [skor] T YÜKLE
-    1 TOPLA
-    T [skor] SAKLA
+    [skor] ARTIR
     skor_guncelle ÇAĞIR
     cizim_adimi ATLA
 
@@ -283,10 +283,13 @@ top_ciz:
     [satir_adresleri_ust + X] T YÜKLE
     T [cizim_adresi_ust] SAKLA
 
-    ; top_x'i adrese ekle
+    ; top_x'i adrese ekle (sayfa sınırını aşarsa üst bayta elde ekle)
     [top_x] T YÜKLE
     [cizim_adresi_alt] TOPLA
     T [cizim_adresi_alt] SAKLA
+    [cizim_adresi_ust] T YÜKLE
+    0 ELDEYLE TOPLA
+    T [cizim_adresi_ust] SAKLA
 
     [top_karakteri] T YÜKLE
     T [[cizim_adresi_alt]] SAKLA
@@ -318,10 +321,13 @@ raket_parca_dongu:
     [satir_adresleri_ust + X] T YÜKLE
     T [cizim_adresi_ust] SAKLA
 
-    ; 2. sütuna çiz
+    ; 2. sütuna çiz (sayfa sınırını aşarsa üst bayta elde ekle)
     2 T YÜKLE
     [cizim_adresi_alt] TOPLA
     T [cizim_adresi_alt] SAKLA
+    [cizim_adresi_ust] T YÜKLE
+    0 ELDEYLE TOPLA
+    T [cizim_adresi_ust] SAKLA
 
     [raket_karakteri] T YÜKLE
     T [[cizim_adresi_alt]] SAKLA
@@ -335,29 +341,10 @@ raket_parca_dongu:
 
 ; Skor tabelasını güncelleyen fonksiyon
 skor_guncelle:
-    ; Skoru onlar ve birler basamağına ayır
     [skor] T YÜKLE
-    T [gecici_skor] SAKLA
-    0 X YÜKLE ; Onlar basamağı
-
-onlar_dongusu:
-    [gecici_skor] T YÜKLE
-    10 KARŞILAŞTIR
-    onlar_bitti KÜÇÜKSE ATLA
-    10 ÇIKAR
-    T [gecici_skor] SAKLA
-    X ARTIR
-    onlar_dongusu ATLA
-
-onlar_bitti:
-    ; Onlar basamağı X'te
-    X T AKTAR
-    48 TOPLA
-    T [0x8017] SAKLA ; Skor onlar basamağı adresi
-
-    [gecici_skor] T YÜKLE
-    48 TOPLA
-    T [0x8018] SAKLA ; Skor birler basamağı adresi
+    T RAKAMLARA AYIR
+    X [0x8019] SAKLA ; Skor onlar basamağı adresi
+    T [0x801A] SAKLA ; Skor birler basamağı adresi
     DÖN
 
 ; ==============================================================

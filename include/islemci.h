@@ -33,6 +33,7 @@ void   islemci_sifirla(islemci_t *islemci);
 /* Komut Döngüsü (Fetch - Decode - Execute) */
 uint8_t islemci_tek_adim(islemci_t *islemci);
 void    islemci_kesme_uret(islemci_t *islemci);
+void    islemci_kare_bildir(islemci_t *islemci);
 
 /* Bayrak İşlemleri */
 void   islemci_bayrak_kur(islemci_t *islemci, bayt_t bayrak, bool durum);

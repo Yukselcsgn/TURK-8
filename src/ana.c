@@ -40,6 +40,7 @@ static void yardim_yazdir(const char *prog_adi) {
     printf("Test modu (başsız, makine tarafından okunabilir çıktı):\n");
     printf("  -t, --test              Başsız çalıştır; 'T8:' önekli sonuç satırları yaz\n");
     printf("      --max-cevrim N      Çevrim sınırı (varsayılan %llu)\n", VARSAYILAN_MAX_CEVRIM);
+    printf("      --girdi METIN       Başlangıçta klavye FIFO tamponuna METIN baytlarını gönder\n");
     printf("      --bellek-dokum A:U  Bitince A adresinden U bayt dök (en çok %d kez)\n", EN_FAZLA_DOKUM);
     printf("      --ekran-metin       Bitince VRAM'i düz metin olarak dök\n");
     printf("  Çıkış kodları: 0 tamam, 1 test hatası, 2 işlemci hatası, 3 zaman aşımı, 4 argüman hatası\n");
@@ -75,12 +76,16 @@ static int test_modu_calistir(islemci_t *islemci, bellek_t *bellek,
                               bool ekran_metin) {
     const char *neden = "bitti";
     int cikis = CIKIS_TAMAM;
+    uint32_t kare_cevrimi = 0;
+
+    bellek->sessiz_mod = true;
 
     while (!islemci->durdu && !bellek->test_sonuc_var && islemci->toplam_cevrim < max_cevrim) {
-        islemci_tek_adim(islemci);
-        if (islemci->kare_bekliyor) {
-            bellek->zamanlayici_sayaci++;
-            islemci->kare_bekliyor = false;
+        uint8_t c = islemci_tek_adim(islemci);
+        kare_cevrimi += c;
+        if (islemci->kare_bekliyor || kare_cevrimi >= CEVRIM_50HZ_KARE) {
+            kare_cevrimi = 0;
+            islemci_kare_bildir(islemci);
         }
     }
 
@@ -104,6 +109,9 @@ static int test_modu_calistir(islemci_t *islemci, bellek_t *bellek,
     printf("T8:SONUC T=%02X X=%02X Y=%02X YG=%02X PS=%04X DURUM=%02X CEVRIM=%llu\n",
            islemci->T, islemci->X, islemci->Y, islemci->YG, islemci->PS,
            islemci->DURUM, (unsigned long long)islemci->toplam_cevrim);
+    printf("T8:DONANIM ZAMAN=%02X SES_F=%02X SES_S=%02X SES_SAYI=%u FIFO=%u TASTI=%d\n",
+           bellek->zamanlayici_sayaci, bellek->ses_frekans, bellek->ses_sure,
+           bellek->ses_calma_sayisi, bellek->klavye_sayi, bellek->klavye_tasti ? 1 : 0);
 
     for (int i = 0; i < dokum_sayisi; i++) {
         printf("T8:BELLEK %04X", dokumler[i].adres);
@@ -128,6 +136,7 @@ int main(int argc, char *argv[]) {
     }
 
     const char *rom_dosyasi = NULL;
+    const char *girdi_metni = NULL;
     bool canli_modu = false;
     bool monitor_modu = false;
     bool ekran_ciz_istegi = false;
@@ -155,6 +164,12 @@ int main(int argc, char *argv[]) {
             test_modu = true;
         } else if (strcmp(argv[i], "--ekran-metin") == 0) {
             ekran_metin = true;
+        } else if (strcmp(argv[i], "--girdi") == 0) {
+            if (i + 1 >= argc) {
+                fprintf(stderr, "[HATA] --girdi için bir metin gerekli\n");
+                return CIKIS_ARGUMAN;
+            }
+            girdi_metni = argv[++i];
         } else if (strcmp(argv[i], "-a") == 0 || strcmp(argv[i], "--adres") == 0) {
             if (i + 1 >= argc || !sayi_oku(argv[++i], &yukle_adresi) || yukle_adresi > 0xFFFF) {
                 fprintf(stderr, "[HATA] --adres için 0..0xFFFF arası bir değer gerekli\n");
@@ -195,6 +210,21 @@ int main(int argc, char *argv[]) {
     /* VRAM'i temizle */
     ekran_temizle(&bellek);
 
+    /* Başlangıç klavye girdisi varsa FIFO tamponuna gönder (UTF-8 Türkçe -> 8-bit ISO-8859-9) */
+    if (girdi_metni) {
+        for (const unsigned char *p = (const unsigned char *)girdi_metni; *p; p++) {
+            bayt_t tus = (bayt_t)(*p);
+            if ((tus == 0xC3 || tus == 0xC4 || tus == 0xC5) && p[1] != '\0') {
+                bayt_t tr = ekran_utf8_bayta_cevir(tus, (bayt_t)p[1]);
+                if (tr != 0) {
+                    tus = tr;
+                    p++;
+                }
+            }
+            bellek_klavye_tusu_gonder(&bellek, tus);
+        }
+    }
+
     /* 2. ROM Dosyasını Yükle (varsayılan RAM adresi: 0x0200) */
     if (rom_dosyasi) {
         if (!test_modu) {
@@ -228,11 +258,13 @@ int main(int argc, char *argv[]) {
         ayiklayici_kabuk_baslat(&ayiklayici);
     } else {
         printf("[SİSTEM] TÜRK-8 çalışmaya başladı...\n");
+        uint32_t kare_cevrimi = 0;
         while (!islemci.durdu) {
-            islemci_tek_adim(&islemci);
-            if (islemci.kare_bekliyor) {
-                bellek.zamanlayici_sayaci++;
-                islemci.kare_bekliyor = false;
+            uint8_t c = islemci_tek_adim(&islemci);
+            kare_cevrimi += c;
+            if (islemci.kare_bekliyor || kare_cevrimi >= CEVRIM_50HZ_KARE) {
+                kare_cevrimi = 0;
+                islemci_kare_bildir(&islemci);
             }
         }
         printf("\n[SİSTEM] İşlemci DURDU. Toplam Çevrim: %llu\n", (unsigned long long)islemci.toplam_cevrim);

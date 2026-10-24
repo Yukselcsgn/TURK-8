@@ -35,11 +35,28 @@ typedef int8_t    isaretli_bayt_t;  /* İşaretli 8-bit (-128 ile +127) */
 #define EKRAN_BAYT_SAYISI   (EKRAN_GENISLIK * EKRAN_YUKSEKLIK)
 
 #define ADRES_GIRIS_CIKIS   0xA000    /* 0xA000 - 0xA0FF: Bellek Haritalı Giriş/Çıkış (MMIO) */
-#define PORT_KLAVYE_VERI    0xA000    /* Okunan son tuş */
-#define PORT_KLAVYE_DURUM   0xA001    /* 1: Yeni tuş var, 0: Yok */
-#define PORT_ZAMANLAYICI    0xA002    /* 50 Hz kare sayacı */
+#define PORT_KLAVYE_VERI    0xA000    /* Klavye 16 baytlık FIFO tamponundan sıradaki tuşu çeker */
+#define PORT_KLAVYE_DURUM   0xA001    /* 1: Tamponda okunmamış tuş var, 0: Boş */
+#define PORT_ZAMANLAYICI    0xA002    /* 50 Hz donanım kare sayacı */
 #define PORT_TERMINAL_YAZ   0xA003    /* Standart çıktıya bayt basar */
+#define PORT_SES_FREKANS    0xA004    /* Ses üreteci frekans / nota kodu (0: sessiz, 1-255) */
+#define PORT_SES_SURE       0xA005    /* Ses süresi (20ms kare birimi; yazılınca sesi tetikler) */
+#define PORT_RASTGELE       0xA006    /* Donanım rastgele sayı üreteci portu (0-255) */
+
+/* Sanal Disk Denetleyici Port Alanı (0xA010 - 0xA017) */
+#define PORT_DISK_KOMUT     0xA010    /* Disk komutu (1: Oku, 2: Yaz, 3: Bilgi) */
+#define PORT_DISK_DURUM     0xA011    /* Disk durumu (0: Hazır, 1: Meşgul, 0xFF: Hata) */
+#define PORT_DISK_SEKTOR    0xA012    /* Sektör numarası (0 - 255) */
+#define PORT_DISK_ADRES_ALT 0xA013    /* DMA bellek adresi alt baytı */
+#define PORT_DISK_ADRES_UST 0xA014    /* DMA bellek adresi üst baytı */
+#define PORT_DISK_SAYI      0xA015    /* Okunacak/yazılacak sektör sayısı */
+#define PORT_DISK_HATA      0xA016    /* Son disk hata kodu */
+#define PORT_DISK_VERI      0xA017    /* Bayt akış veri portu */
+
 #define PORT_TEST_SONUC     0xA0FF    /* Test modu: 1 yazılırsa BAŞARILI, başka değer hata kodu; yazılınca çalışma biter */
+
+#define KLAVYE_FIFO_BOYUTU  16        /* Donanım klavye FIFO tampon kapasitesi (bayt) */
+#define CEVRIM_50HZ_KARE    500       /* 50 Hz kare başına varsayılan işlemci saat çevrimi */
 
 #define ADRES_ROM_BAS       0xC000    /* 0xC000 - 0xFFFF: Kalıcı Sistem ROM / BIOS (16 KB) */
 #define VEKTOR_SISTEM       0xFFFA    /* Yazılım kesmesi (<n> SİSTEM) atlama adresi */

@@ -127,6 +127,16 @@ void islemci_kesme_uret(islemci_t *islemci) {
     }
 }
 
+void islemci_kare_bildir(islemci_t *islemci) {
+    if (!islemci || !islemci->bellek) return;
+    islemci->bellek->zamanlayici_sayaci++;
+    if (islemci->bellek->ses_sure > 0) {
+        islemci->bellek->ses_sure--;
+    }
+    islemci->kare_bekliyor = false;
+    islemci_kesme_uret(islemci);
+}
+
 uint8_t islemci_tek_adim(islemci_t *islemci) {
     if (!islemci || islemci->durdu) return 0;
 

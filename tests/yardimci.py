@@ -44,6 +44,9 @@ class Sonuc:
         self.test_kodu = None
         self.T = self.X = self.Y = self.YG = self.PS = self.DURUM = None
         self.cevrim = None
+        self.zaman = self.ses_frekans = self.ses_sure = self.ses_sayisi = None
+        self.fifo_sayi = None
+        self.fifo_tasti = False
         self.bellek_dokumleri = {}
         self.ekran_satirlari = []
 
@@ -74,6 +77,14 @@ class Sonuc:
                 self.PS = int(degerler["PS"], 16)
                 self.DURUM = int(degerler["DURUM"], 16)
                 self.cevrim = int(degerler["CEVRIM"])
+            elif kisim.startswith("DONANIM "):
+                degerler = dict(p.split("=") for p in kisim[8:].split())
+                self.zaman = int(degerler["ZAMAN"], 16)
+                self.ses_frekans = int(degerler["SES_F"], 16)
+                self.ses_sure = int(degerler["SES_S"], 16)
+                self.ses_sayisi = int(degerler["SES_SAYI"])
+                self.fifo_sayi = int(degerler["FIFO"])
+                self.fifo_tasti = bool(int(degerler["TASTI"]))
             elif kisim.startswith("BELLEK "):
                 parcalar = kisim.split()
                 adres = int(parcalar[1], 16)
@@ -110,7 +121,7 @@ def _emulatoru_hazirla():
             "%s bulunamadı; önce 'make' çalıştırın (ya da 'make test')" % EMULATOR.name)
 
 
-def calistir_rom(rom_yolu, max_cevrim=200000, dokum=(), ekran=False, adres=None, zaman_siniri=60):
+def calistir_rom(rom_yolu, max_cevrim=200000, dokum=(), ekran=False, adres=None, girdi=None, zaman_siniri=60):
     """Hazır .rom dosyasını başsız çalıştırır.
 
     dokum: [(adres, uzunluk), ...] bitişte dökülecek bellek aralıkları
@@ -119,6 +130,8 @@ def calistir_rom(rom_yolu, max_cevrim=200000, dokum=(), ekran=False, adres=None,
     komut = [str(EMULATOR), "--test", "--max-cevrim", str(max_cevrim)]
     if adres is not None:
         komut += ["--adres", "0x%04X" % adres]
+    if girdi is not None:
+        komut += ["--girdi", str(girdi)]
     for a, u in dokum:
         komut += ["--bellek-dokum", "0x%04X:%d" % (a, u)]
     if ekran:
@@ -141,7 +154,7 @@ def derle_metin(kaynak, dur_ekle=True):
     return bytes(imaj)
 
 
-def calistir(kaynak, max_cevrim=200000, dokum=(), ekran=False):
+def calistir(kaynak, max_cevrim=200000, dokum=(), ekran=False, girdi=None):
     """Assembly metnini derle + çalıştır. Başlangıç adresi 0x0200 olmalıdır.
 
     Programın sonuna DUR yazmayı unutmayın; zaman aşımı exit 3 verir.
@@ -154,7 +167,7 @@ def calistir(kaynak, max_cevrim=200000, dokum=(), ekran=False):
     with tempfile.TemporaryDirectory() as klasor:
         yol = Path(klasor) / "test.rom"
         yol.write_bytes(bytes(imaj))
-        return calistir_rom(yol, max_cevrim=max_cevrim, dokum=dokum, ekran=ekran)
+        return calistir_rom(yol, max_cevrim=max_cevrim, dokum=dokum, ekran=ekran, girdi=girdi)
 
 
 class TurkTestCase(unittest.TestCase):
