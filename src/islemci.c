@@ -117,10 +117,10 @@ void islemci_kesme_uret(islemci_t *islemci) {
     /* Yeni kesmeleri engelle */
     islemci_bayrak_kur(islemci, BAYRAK_KESME, true);
 
-    /* Kesme vektörüne atla (önce ROM 0xFFFE, boşsa RAM 0x00FE) */
-    kelime_t kesme_adresi = bellek_oku_kelime(islemci->bellek, VEKTOR_KESME);
+    /* Kesme vektörüne atla (önce kullanıcı RAM vektörü 0x00FE, boşsa BIOS ROM 0xFFFE) */
+    kelime_t kesme_adresi = bellek_oku_kelime(islemci->bellek, ADRES_KESME_VEKTOR);
     if (kesme_adresi == 0 || kesme_adresi == 0xFFFF) {
-        kesme_adresi = bellek_oku_kelime(islemci->bellek, ADRES_KESME_VEKTOR);
+        kesme_adresi = bellek_oku_kelime(islemci->bellek, VEKTOR_KESME);
     }
     if (kesme_adresi != 0 && kesme_adresi != 0xFFFF) {
         islemci->PS = kesme_adresi;
@@ -172,9 +172,9 @@ uint8_t islemci_tek_adim(islemci_t *islemci) {
             islemci_yigina_it_kelime(islemci, islemci->PS);
             islemci_yigina_it_bayt(islemci, islemci->DURUM);
             islemci_bayrak_kur(islemci, BAYRAK_KESME, true);
-            kelime_t hedef = bellek_oku_kelime(islemci->bellek, VEKTOR_SISTEM);
+            kelime_t hedef = bellek_oku_kelime(islemci->bellek, ADRES_SISTEM_VEKTOR);
             if (hedef == 0 || hedef == 0xFFFF) {
-                hedef = bellek_oku_kelime(islemci->bellek, ADRES_SISTEM_VEKTOR);
+                hedef = bellek_oku_kelime(islemci->bellek, VEKTOR_SISTEM);
             }
             if (hedef == 0 || hedef == 0xFFFF) {
                 hedef = bellek_oku_kelime(islemci->bellek, VEKTOR_KESME);

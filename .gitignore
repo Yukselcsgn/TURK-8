@@ -9,4 +9,5 @@ turk8.exe
 
 # Derlenmiş ROM'lar (araclar/derleyici.py ile .asm'den üretilir)
 programlar/*.rom
+roms/*.rom
 tests/*.rom

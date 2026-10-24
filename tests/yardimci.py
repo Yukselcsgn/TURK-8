@@ -121,8 +121,8 @@ def _emulatoru_hazirla():
             "%s bulunamadı; önce 'make' çalıştırın (ya da 'make test')" % EMULATOR.name)
 
 
-def calistir_rom(rom_yolu, max_cevrim=200000, dokum=(), ekran=False, adres=None, girdi=None, zaman_siniri=60):
-    """Hazır .rom dosyasını başsız çalıştırır.
+def calistir_rom(rom_yolu=None, max_cevrim=200000, dokum=(), ekran=False, adres=None, girdi=None, zaman_siniri=60):
+    """Hazır .rom dosyasını (veya rom_yolu=None ise doğrudan BIOS ROM'u) başsız çalıştırır.
 
     dokum: [(adres, uzunluk), ...] bitişte dökülecek bellek aralıkları
     """
@@ -136,12 +136,18 @@ def calistir_rom(rom_yolu, max_cevrim=200000, dokum=(), ekran=False, adres=None,
         komut += ["--bellek-dokum", "0x%04X:%d" % (a, u)]
     if ekran:
         komut.append("--ekran-metin")
-    komut.append(str(rom_yolu))
+    if rom_yolu is not None:
+        komut.append(str(rom_yolu))
 
     islem = subprocess.run(komut, capture_output=True, timeout=zaman_siniri)
     return Sonuc(islem.returncode,
                  islem.stdout.decode("utf-8", errors="replace"),
                  islem.stderr.decode("utf-8", errors="replace"))
+
+
+def calistir_bios(max_cevrim=30000, dokum=(), ekran=True, girdi=None):
+    """Argümansız olarak doğrudan BIOS ROM'dan (0xFFFC vektörü) başsız başlatır."""
+    return calistir_rom(None, max_cevrim=max_cevrim, dokum=dokum, ekran=ekran, girdi=girdi)
 
 
 def derle_metin(kaynak, dur_ekle=True):

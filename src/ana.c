@@ -17,6 +17,7 @@
 
 #define EN_FAZLA_DOKUM     8
 #define VARSAYILAN_MAX_CEVRIM 10000000ULL
+#define VARSAYILAN_BIOS_YOLU  "roms/bios.rom"
 
 typedef struct {
     kelime_t adres;
@@ -28,7 +29,8 @@ static void yardim_yazdir(const char *prog_adi) {
     printf("       TÜRK-8: 8-BİT TÜRKÇE MİMARİ VE SANAL BİLGİSAYAR             \n");
     printf("===================================================================\n");
     printf("Kullanım:\n");
-    printf("  %s [seçenekler] <program.rom>\n\n", prog_adi);
+    printf("  %s                       BIOS ROM'dan doğrudan etkileşimli açılış\n", prog_adi);
+    printf("  %s [seçenekler] [program.rom]\n\n", prog_adi);
     printf("Seçenekler:\n");
     printf("  -c, --canli       Gerçek zamanlı etkileşimli ekran modunu (TUI) başlat\n");
     printf("  -m, --monitor     Etkileşimli sistem monitörünü (ayıklayıcı) başlat\n");
@@ -130,11 +132,6 @@ static int test_modu_calistir(islemci_t *islemci, bellek_t *bellek,
 }
 
 int main(int argc, char *argv[]) {
-    if (argc < 2) {
-        yardim_yazdir(argv[0]);
-        return CIKIS_ARGUMAN;
-    }
-
     const char *rom_dosyasi = NULL;
     const char *girdi_metni = NULL;
     bool canli_modu = false;
@@ -204,6 +201,9 @@ int main(int argc, char *argv[]) {
     bellek_t bellek;
     bellek_olustur(&bellek);
 
+    /* Sistem BIOS ROM'u (0xC000 - 0xFFFF) mevcutsa belleğe yükle */
+    bool bios_yuklendi = bellek_yukle_ikili(&bellek, ADRES_ROM_BAS, VARSAYILAN_BIOS_YOLU);
+
     islemci_t islemci;
     islemci_olustur(&islemci, &bellek);
 
@@ -225,7 +225,7 @@ int main(int argc, char *argv[]) {
         }
     }
 
-    /* 2. ROM Dosyasını Yükle (varsayılan RAM adresi: 0x0200) */
+    /* 2. ROM Dosyasını Yükle (varsayılan RAM adresi: 0x0200) veya BIOS'tan Aç */
     if (rom_dosyasi) {
         if (!test_modu) {
             printf("[SİSTEM] Program yükleniyor: %s\n", rom_dosyasi);
@@ -238,8 +238,16 @@ int main(int argc, char *argv[]) {
         if (!test_modu) {
             printf("[SİSTEM] Başlangıç Program Sayacı (PS): 0x%04X\n", islemci.PS);
         }
-    } else if (test_modu) {
-        fprintf(stderr, "[HATA] Test modu için bir ROM dosyası gerekli\n");
+    } else if (bios_yuklendi) {
+        /* Argümansız çalıştırıldı: sıfırlama vektöründen (0xFFFC -> BIOS) açıl */
+        islemci_sifirla(&islemci);
+        if (!test_modu && !monitor_modu && !ekran_ciz_istegi && !dokum_istegi && !yazmac_istegi) {
+            canli_modu = true;
+        }
+    } else {
+        fprintf(stderr, "[HATA] BIOS ROM (%s) bulunamadı ve çalıştırılacak bir ROM dosyası verilmedi.\n",
+                VARSAYILAN_BIOS_YOLU);
+        yardim_yazdir(argv[0]);
         return CIKIS_ARGUMAN;
     }
 

@@ -127,10 +127,15 @@ def dizge_coz(metin):
 
 
 def sayi_coz(metin, semboller):
-    """Sayı (10'luk, 0x/$ onaltılık, 0b ikili), 'c' karakteri, sabit ya da etiket."""
+    """Sayı (10'luk, 0x/$ onaltılık, 0b ikili), 'c' karakteri, sabit ya da etiket.
+    Başında '<' varsa 16-bit değerin alt baytını, '>' varsa üst baytını verir."""
     m = metin.strip()
     if m.startswith("#"):
         m = m[1:].strip()
+    if m.startswith("<") and len(m) > 1:
+        return sayi_coz(m[1:], semboller) & 0xFF
+    if m.startswith(">") and len(m) > 1:
+        return (sayi_coz(m[1:], semboller) >> 8) & 0xFF
     if len(m) == 3 and m[0] == "'" and m[2] == "'":
         return _karakter_kodu(m[1])
     try:
@@ -305,19 +310,20 @@ def derle_ayrintili(kaynak_metin):
         return VARSAYILAN_BASLANGIC, bytearray(), []
 
     # Parçaları adres sırasıyla birleştir; aradaki boşluk sıfırla dolar.
-    baslangic = parcalar[0][0]
+    sirali_parcalar = sorted(enumerate(parcalar), key=lambda x: (x[1][0], x[0]))
+    baslangic = sirali_parcalar[0][1][0]
     imaj = bytearray()
-    for oge_adres, baytlar, ham in parcalar:
+    for _, (oge_adres, baytlar, ham) in sirali_parcalar:
         konum = oge_adres - baslangic
         if konum < len(imaj):
             satir_no = next(n for a, n, h, t, v in ogeler if a == oge_adres and h == ham)
             raise DerlemeHatasi([(satir_no,
-                                  "kod parçaları çakışıyor ya da adres geriye gidiyor (0x%04X)" % oge_adres,
+                                  "kod parçaları çakışıyor (0x%04X)" % oge_adres,
                                   ham)])
         imaj.extend(b"\x00" * (konum - len(imaj)))
         imaj.extend(baytlar)
 
-    return baslangic, imaj, parcalar
+    return baslangic, imaj, [p for _, p in sirali_parcalar]
 
 
 def derle(kaynak_metin):

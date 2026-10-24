@@ -9,7 +9,7 @@ Hedef: `./turk8` yazınca makine **kendi ROM'undan açılsın**, ekranda imleç 
 flowchart LR
     F0["Faz 0: Hijyen + test altyapısı ✅"] --> F1["Faz 1: ISA v1.0 dondur ✅"]
     F1 --> F2["Faz 2: Donanım ✅"]
-    F2 --> F3["Faz 3: BIOS ROM + açılış"]
+    F2 --> F3["Faz 3: BIOS ROM + açılış ✅"]
     F3 --> F4["Faz 4: Kabuk"]
     F4 --> F5["Faz 5: Sanal disk"]
     F5 --> F6["Faz 6: Monitör + assembler + editör"]
@@ -106,11 +106,11 @@ Her faz **test geçmeden commit edilmez**. Test altyapısı Faz 0'da kurulur: `0
 - [x] Rastgele sayı üreteci portu (`0xA006`), disk denetleyici port alanı (`0xA010–0xA017`) ayrıldı.
 - [x] Doğrulama: kesme, FIFO taşması, RNG dağılımı testleri (`tests/test_faz2_donanim.py`); Pong (`programlar/pong.asm`) `KARE BEKLE`, `T RAKAMLARA AYIR` ve ses portu ile güncellendi.
 
-### Faz 3 — BIOS ROM ve açılış
-- [ ] `roms/bios.asm` → `0xC000`: sıfırlama vektörü, bellek testi, açılış başlığı ("TÜRK-8 ... 31 KB SERBEST"), imleç.
-- [ ] **BIOS servisleri** (`<n> SİSTEM`): harf yaz, satır oku, tuş bekle, ekran temizle, ekran kaydır, ses çal, süre oku.
-- [ ] `./turk8` argümansız → doğrudan açılış. Derleyiciye **çok bölümlü `.BAŞLANGIÇ`** desteği (ROM + vektörler).
-- [ ] Doğrulama: başsız açılış testi (ekran içeriğini VRAM'den kontrol et).
+### Faz 3 — BIOS ROM ve açılış (Tamamlandı ✅)
+- [x] `roms/bios.asm` → `0xC000`: sıfırlama vektörü, bellek testi, açılış başlığı ("TÜRK-8 ... 31 KB SERBEST RAM"), imleç.
+- [x] **BIOS servisleri** (`<n> SİSTEM`): ekran temizle (`0`), harf yaz (`1`), metin yaz (`2`), beklemesiz tuş oku (`3`), tuş bekle (`4`), satır oku (`5`), ekran kaydır (`6`), ses çal (`7`), süre oku (`8`).
+- [x] `./turk8` argümansız → doğrudan açılış. Derleyiciye **çok bölümlü `.BAŞLANGIÇ`** ve `<etiket` / `>etiket` alt/üst bayt operatörü desteği (ROM + vektörler).
+- [x] Doğrulama: başsız açılış testi (`tests/test_faz3_bios.py`, ekran içeriğini VRAM'den kontrol et).
 
 ### Faz 4 — Kabuk (ROM içinde)
 - [ ] Satır düzenleme (Backspace, Enter), komutlar: `YARDIM`, `TEMİZLE`, `BİLGİ`, `BELLEK <adr>`, `ÇALIŞTIR <adr>`, `SÜRE`.
