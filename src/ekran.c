@@ -188,9 +188,9 @@ void ekran_ciz(const bellek_t *bellek) {
 /* Canlı TUI Çizimi (İmleci başa alarak titreşimsiz yenileme) */
 static void canli_arayuz_ciz(const islemci_t *islemci, const bellek_t *bellek) {
     printf("\033[H\033[1;32m");
-    printf("╔══════════════════════════════════════════╗\n");
-    printf("║    TÜRK-8 ETKİLEŞİMLİ CANLI BİLGİSAYAR   ║\n");
-    printf("╠══════════════════════════════════════════╣\n");
+    printf("╔══════════════════════════════════════════╗\r\n");
+    printf("║    TÜRK-8 ETKİLEŞİMLİ CANLI BİLGİSAYAR   ║\r\n");
+    printf("╠══════════════════════════════════════════╣\r\n");
 
     for (int y = 0; y < EKRAN_YUKSEKLIK; y++) {
         printf("║");
@@ -198,16 +198,16 @@ static void canli_arayuz_ciz(const islemci_t *islemci, const bellek_t *bellek) {
             kelime_t ofset = (kelime_t)(y * EKRAN_GENISLIK + x);
             vram_hucre_yazdir(bellek->veri[ADRES_VRAM_BAS + ofset]);
         }
-        printf("║\n");
+        printf("║\r\n");
     }
 
-    printf("╠══════════════════════════════════════════╣\n");
-    printf("║ T: 0x%02X (%3d) | X: 0x%02X | Y: 0x%02X        ║\n",
+    printf("╠══════════════════════════════════════════╣\r\n");
+    printf("║ T: 0x%02X (%3d) | X: 0x%02X | Y: 0x%02X        ║\r\n",
            islemci->T, islemci->T, islemci->X, islemci->Y);
-    printf("║ PS: 0x%04X | YG: 0x%02X | Çevrim: %-8llu ║\n",
+    printf("║ PS: 0x%04X | YG: 0x%02X | Çevrim: %-8llu ║\r\n",
            islemci->PS, islemci->YG, (unsigned long long)islemci->toplam_cevrim);
-    printf("║ [ESC: Çıkış]  [Klavyeden yazı yazın...]  ║\n");
-    printf("╚══════════════════════════════════════════╝\033[0m\n");
+    printf("║ [ESC: Çıkış]  [Klavyeden yazı yazın...]  ║\r\n");
+    printf("╚══════════════════════════════════════════╝\033[0m\r\n");
     fflush(stdout);
 }
 

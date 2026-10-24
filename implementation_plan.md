@@ -10,7 +10,7 @@ flowchart LR
     F0["Faz 0: Hijyen + test altyapısı ✅"] --> F1["Faz 1: ISA v1.0 dondur ✅"]
     F1 --> F2["Faz 2: Donanım ✅"]
     F2 --> F3["Faz 3: BIOS ROM + açılış ✅"]
-    F3 --> F4["Faz 4: Kabuk"]
+    F3 --> F4["Faz 4: Kabuk ✅"]
     F4 --> F5["Faz 5: Sanal disk"]
     F5 --> F6["Faz 6: Monitör + assembler + editör"]
     F6 --> F7["Faz 7: Türkçe BASIC"]
@@ -112,9 +112,9 @@ Her faz **test geçmeden commit edilmez**. Test altyapısı Faz 0'da kurulur: `0
 - [x] `./turk8` argümansız → doğrudan açılış. Derleyiciye **çok bölümlü `.BAŞLANGIÇ`** ve `<etiket` / `>etiket` alt/üst bayt operatörü desteği (ROM + vektörler).
 - [x] Doğrulama: başsız açılış testi (`tests/test_faz3_bios.py`, ekran içeriğini VRAM'den kontrol et).
 
-### Faz 4 — Kabuk (ROM içinde)
-- [ ] Satır düzenleme (Backspace, Enter), komutlar: `YARDIM`, `TEMİZLE`, `BİLGİ`, `BELLEK <adr>`, `ÇALIŞTIR <adr>`, `SÜRE`.
-- [ ] Doğrulama: klavye girdisini besleyip çıktıyı VRAM'den doğrulayan betikli testler.
+### Faz 4 — Kabuk (ROM içinde — Tamamlandı ✅)
+- [x] Satır düzenleme (Backspace, Enter), küçük/büyük harf ve Türkçe karakter duyarsız komut ayrıştırıcı (`YARDIM`, `TEMİZLE`, `BİLGİ`, `BELLEK [adr]`, `ÇALIŞTIR [adr]`, `SÜRE`).
+- [x] Doğrulama: klavye girdisini besleyip çıktıyı VRAM'den doğrulayan betikli testler (`tests/test_faz4_kabuk.py`).
 
 ### Faz 5 — Sanal disk
 - [ ] `disk.t8` imajı: 256 baytlık sektörler, 16 girişli basit dizin. Emülatörde disk denetleyici.

@@ -32,6 +32,16 @@
 .TANIM SATIR_TAMPONU    0x0080  ; 64 baytlık standart satır girdi tamponu (0x0080-0x00BF)
 .TANIM SATIR_MAKS_UZUN  36      ; Bir satırda okunabilecek azami karakter sayısı
 
+; Kabuk (Shell) Sıfır Sayfa Değişkenleri (0x00D0 - 0x00DF)
+.TANIM KABUK_SABLON_ALT 0x00D0  ; Komut şablonu işaretçisi (alt bayt)
+.TANIM KABUK_SABLON_UST 0x00D1  ; Komut şablonu işaretçisi (üst bayt)
+.TANIM KABUK_ARG_ALT    0x00D2  ; Çözümlenen 16-bit argüman adresi (alt bayt)
+.TANIM KABUK_ARG_UST    0x00D3  ; Çözümlenen 16-bit argüman adresi (üst bayt)
+.TANIM KABUK_INDEKS     0x00D4  ; Satır tamponu okuma indeksi
+.TANIM KABUK_SAYAC      0x00D5  ; BELLEK dökümü satır/bayt sayacı
+.TANIM KABUK_SUTUN      0x00D6  ; BELLEK dökümü sütun sayacı
+.TANIM KABUK_HEX_GECICI 0x00D7  ; Hex çevrim geçici baytı
+
 ; BIOS Sıfır Sayfa Değişkenleri (0x00E0 - 0x00EF)
 .TANIM IMLEC_SUTUN      0x00E0  ; 0..39 arası imleç sütunu
 .TANIM IMLEC_SATIR      0x00E1  ; 0..24 arası imleç satırı
@@ -94,6 +104,9 @@ bios_zp_temizle:
     T [BELLEK_TEST_UST] SAKLA
 
 post_dongusu:
+    [[BELLEK_TEST_ALT]] T YÜKLE
+    T [GECICI_KARAKTER] SAKLA
+
     0x5A T YÜKLE
     T [[BELLEK_TEST_ALT]] SAKLA
     [[BELLEK_TEST_ALT]] T YÜKLE
@@ -106,7 +119,7 @@ post_dongusu:
     0xA5 KARŞILAŞTIR
     post_hatasi FARKLIYSA ATLA
 
-    0x00 T YÜKLE
+    [GECICI_KARAKTER] T YÜKLE
     T [[BELLEK_TEST_ALT]] SAKLA
 
     [BELLEK_TEST_UST] ARTIR
@@ -138,7 +151,7 @@ post_hatasi:
     DUR
 
 ; =============================================================================
-; 2. AÇILIŞ KOMUT İSTEMİ DÖNGÜSÜ (> _)
+; 2. ROM KOMUT KABUĞU (YARDIM, TEMİZLE, BİLGİ, BELLEK, ÇALIŞTIR, SÜRE)
 ; =============================================================================
 bios_komut_dongusu:
     ; İstem karakterlerini yaz: "> "
@@ -150,8 +163,490 @@ bios_komut_dongusu:
     ; Kullanıcıdan bir satır oku (0x0080 tamponuna)
     5 SİSTEM
 
-    ; Bir sonraki satırda tekrar istem göster
+    ; Satır başındaki boşlukları atla ve tamponu büyük harfe normalize et
+    kabuk_satir_hazirla ÇAĞIR
+
+    ; Boş satır mı?
+    [KABUK_INDEKS] X YÜKLE
+    [SATIR_TAMPONU + X] T YÜKLE
+    0 KARŞILAŞTIR
+    bios_komut_dongusu EŞİTSE ATLA
+
+    ; --- 1) YARDIM ---
+    <kmt_yardim X YÜKLE
+    >kmt_yardim Y YÜKLE
+    kabuk_komut_eslesir_mi ÇAĞIR
+    1 KARŞILAŞTIR
+    kabuk_yardim_calistir EŞİTSE ATLA
+
+    ; --- 2) TEMİZLE (ASCII: TEMIZLE) ---
+    <kmt_temizle X YÜKLE
+    >kmt_temizle Y YÜKLE
+    kabuk_komut_eslesir_mi ÇAĞIR
+    1 KARŞILAŞTIR
+    kabuk_temizle_calistir EŞİTSE ATLA
+
+    ; --- 3) BİLGİ (ASCII: BILGI) ---
+    <kmt_bilgi X YÜKLE
+    >kmt_bilgi Y YÜKLE
+    kabuk_komut_eslesir_mi ÇAĞIR
+    1 KARŞILAŞTIR
+    kabuk_bilgi_calistir EŞİTSE ATLA
+
+    ; --- 4) SÜRE (ASCII: SURE) ---
+    <kmt_sure X YÜKLE
+    >kmt_sure Y YÜKLE
+    kabuk_komut_eslesir_mi ÇAĞIR
+    1 KARŞILAŞTIR
+    kabuk_sure_calistir EŞİTSE ATLA
+
+    ; --- 5) BELLEK [adres] ---
+    <kmt_bellek X YÜKLE
+    >kmt_bellek Y YÜKLE
+    kabuk_komut_eslesir_mi ÇAĞIR
+    1 KARŞILAŞTIR
+    kabuk_bellek_calistir EŞİTSE ATLA
+
+    ; --- 6) ÇALIŞTIR [adres] (ASCII: CALISTIR) ---
+    <kmt_calistir X YÜKLE
+    >kmt_calistir Y YÜKLE
+    kabuk_komut_eslesir_mi ÇAĞIR
+    1 KARŞILAŞTIR
+    kabuk_calistir_komutu EŞİTSE ATLA
+
+    ; Tanınmayan komut: hata mesajı yaz
+    <metin_bilinmeyen X YÜKLE
+    >metin_bilinmeyen Y YÜKLE
+    2 SİSTEM
     bios_komut_dongusu ATLA
+
+; --- Komut İşleyicileri ---
+
+kabuk_yardim_calistir:
+    <metin_yardim X YÜKLE
+    >metin_yardim Y YÜKLE
+    2 SİSTEM
+    bios_komut_dongusu ATLA
+
+kabuk_temizle_calistir:
+    0 SİSTEM
+    bios_komut_dongusu ATLA
+
+kabuk_bilgi_calistir:
+    <metin_bilgi X YÜKLE
+    >metin_bilgi Y YÜKLE
+    2 SİSTEM
+    bios_komut_dongusu ATLA
+
+kabuk_sure_calistir:
+    <metin_sure_baslik X YÜKLE
+    >metin_sure_baslik Y YÜKLE
+    2 SİSTEM
+
+    ; 8 SİSTEM -> T = alt bayt, X = üst bayt
+    8 SİSTEM
+    T [KABUK_ARG_ALT] SAKLA
+    X [KABUK_ARG_UST] SAKLA
+
+    ; Hex olarak 0xUUUU yazdır
+    '0' T YÜKLE
+    1 SİSTEM
+    'x' T YÜKLE
+    1 SİSTEM
+    [KABUK_ARG_UST] T YÜKLE
+    kabuk_hex_bayt_yaz ÇAĞIR
+    [KABUK_ARG_ALT] T YÜKLE
+    kabuk_hex_bayt_yaz ÇAĞIR
+
+    ; Parantez içinde alt baytın 3 basamaklı onluk değerini yazdır
+    ' ' T YÜKLE
+    1 SİSTEM
+    '(' T YÜKLE
+    1 SİSTEM
+    [KABUK_ARG_ALT] T YÜKLE
+    T RAKAMLARA AYIR
+    T İT
+    X İT
+    Y T AKTAR
+    1 SİSTEM
+    T ÇEK
+    1 SİSTEM
+    T ÇEK
+    1 SİSTEM
+    <metin_sure_son X YÜKLE
+    >metin_sure_son Y YÜKLE
+    2 SİSTEM
+    bios_komut_dongusu ATLA
+
+kabuk_bellek_calistir:
+    ; Varsayılan adres: 0x0200
+    0x00 T YÜKLE
+    T [KABUK_ARG_ALT] SAKLA
+    0x02 T YÜKLE
+    T [KABUK_ARG_UST] SAKLA
+
+    ; Argüman verilmiş mi kontrol et
+    kabuk_bosluk_atla ÇAĞIR
+    [KABUK_INDEKS] X YÜKLE
+    [SATIR_TAMPONU + X] T YÜKLE
+    0 KARŞILAŞTIR
+    bellek_dokum_basla EŞİTSE ATLA
+
+    kabuk_hex_adres_oku ÇAĞIR
+    1 KARŞILAŞTIR
+    bellek_dokum_basla EŞİTSE ATLA
+    kabuk_adres_hatasi ATLA
+
+bellek_dokum_basla:
+    ; 4 satır x 8 bayt = 32 bayt bellek dökümü
+    4 T YÜKLE
+    T [KABUK_SAYAC] SAKLA
+
+bellek_satir_dongu:
+    ; Satır başı adresi: AAAA:
+    [KABUK_ARG_UST] T YÜKLE
+    kabuk_hex_bayt_yaz ÇAĞIR
+    [KABUK_ARG_ALT] T YÜKLE
+    kabuk_hex_bayt_yaz ÇAĞIR
+    ':' T YÜKLE
+    1 SİSTEM
+    ' ' T YÜKLE
+    1 SİSTEM
+
+    8 T YÜKLE
+    T [KABUK_SUTUN] SAKLA
+
+bellek_bayt_dongu:
+    [[KABUK_ARG_ALT]] T YÜKLE
+    kabuk_hex_bayt_yaz ÇAĞIR
+    ' ' T YÜKLE
+    1 SİSTEM
+
+    ; 16-bit adresi 1 artır
+    [KABUK_ARG_ALT] ARTIR
+    bellek_adres_artti FARKLIYSA ATLA
+    [KABUK_ARG_UST] ARTIR
+bellek_adres_artti:
+    [KABUK_SUTUN] AZALT
+    bellek_bayt_dongu FARKLIYSA ATLA
+
+    10 T YÜKLE
+    1 SİSTEM
+
+    [KABUK_SAYAC] AZALT
+    bellek_satir_dongu FARKLIYSA ATLA
+    bios_komut_dongusu ATLA
+
+kabuk_calistir_komutu:
+    ; Varsayılan çalıştırma adresi: 0x0200
+    0x00 T YÜKLE
+    T [KABUK_ARG_ALT] SAKLA
+    0x02 T YÜKLE
+    T [KABUK_ARG_UST] SAKLA
+
+    kabuk_bosluk_atla ÇAĞIR
+    [KABUK_INDEKS] X YÜKLE
+    [SATIR_TAMPONU + X] T YÜKLE
+    0 KARŞILAŞTIR
+    calistir_hedefe_git EŞİTSE ATLA
+
+    kabuk_hex_adres_oku ÇAĞIR
+    1 KARŞILAŞTIR
+    calistir_hedefe_git EŞİTSE ATLA
+    kabuk_adres_hatasi ATLA
+
+calistir_hedefe_git:
+    ; Kullanıcı programı DÖN ile biterse yeniden kabuk döngüsüne dönsün
+    [KABUK_ARG_ALT] ÇAĞIR
+    bios_komut_dongusu ATLA
+
+kabuk_adres_hatasi:
+    <metin_hata_adres X YÜKLE
+    >metin_hata_adres Y YÜKLE
+    2 SİSTEM
+    bios_komut_dongusu ATLA
+
+; --- Kabuk Yardımcı Alt Programları ---
+
+; -----------------------------------------------------------------------------
+; kabuk_satir_hazirla:
+; SATIR_TAMPONU içindeki küçük harfleri ve Türkçe karakterleri (ISO-8859-9)
+; büyük ASCII karşılıklarına (C, G, I, O, S, U) çevirir ve baştaki boşlukları atlar.
+; -----------------------------------------------------------------------------
+kabuk_satir_hazirla:
+    0 X YÜKLE
+satir_norm_dongu:
+    [SATIR_TAMPONU + X] T YÜKLE
+    0 KARŞILAŞTIR
+    satir_norm_bitti EŞİTSE ATLA
+
+    ; Küçük ASCII 'a'..'z' (97..122) -> 'A'..'Z'
+    'a' KARŞILAŞTIR
+    satir_tr_kontrol KÜÇÜKSE ATLA
+    123 KARŞILAŞTIR
+    satir_tr_kontrol BÜYÜK VEYA EŞİTSE ATLA
+    32 ÇIKAR
+    satir_norm_yaz ATLA
+
+satir_tr_kontrol:
+    ; Ç (0xC7) / ç (0xE7) -> 'C'
+    0xC7 KARŞILAŞTIR
+    tr_c_yap EŞİTSE ATLA
+    0xE7 KARŞILAŞTIR
+    tr_c_yap EŞİTSE ATLA
+
+    ; Ğ (0xD0) / ğ (0xF0) -> 'G'
+    0xD0 KARŞILAŞTIR
+    tr_g_yap EŞİTSE ATLA
+    0xF0 KARŞILAŞTIR
+    tr_g_yap EŞİTSE ATLA
+
+    ; İ (0xDD) / ı (0xFD) -> 'I'
+    0xDD KARŞILAŞTIR
+    tr_i_yap EŞİTSE ATLA
+    0xFD KARŞILAŞTIR
+    tr_i_yap EŞİTSE ATLA
+
+    ; Ö (0xD6) / ö (0xF6) -> 'O'
+    0xD6 KARŞILAŞTIR
+    tr_o_yap EŞİTSE ATLA
+    0xF6 KARŞILAŞTIR
+    tr_o_yap EŞİTSE ATLA
+
+    ; Ş (0xDE) / ş (0xFE) -> 'S'
+    0xDE KARŞILAŞTIR
+    tr_s_yap EŞİTSE ATLA
+    0xFE KARŞILAŞTIR
+    tr_s_yap EŞİTSE ATLA
+
+    ; Ü (0xDC) / ü (0xFC) -> 'U'
+    0xDC KARŞILAŞTIR
+    tr_u_yap EŞİTSE ATLA
+    0xFC KARŞILAŞTIR
+    tr_u_yap EŞİTSE ATLA
+    satir_norm_ilerle ATLA
+
+tr_c_yap:
+    'C' T YÜKLE
+    satir_norm_yaz ATLA
+tr_g_yap:
+    'G' T YÜKLE
+    satir_norm_yaz ATLA
+tr_i_yap:
+    'I' T YÜKLE
+    satir_norm_yaz ATLA
+tr_o_yap:
+    'O' T YÜKLE
+    satir_norm_yaz ATLA
+tr_s_yap:
+    'S' T YÜKLE
+    satir_norm_yaz ATLA
+tr_u_yap:
+    'U' T YÜKLE
+
+satir_norm_yaz:
+    T [SATIR_TAMPONU + X] SAKLA
+satir_norm_ilerle:
+    X ARTIR
+    satir_norm_dongu ATLA
+
+satir_norm_bitti:
+    0 T YÜKLE
+    T [KABUK_INDEKS] SAKLA
+    kabuk_bosluk_atla ÇAĞIR
+    DÖN
+
+; -----------------------------------------------------------------------------
+; kabuk_bosluk_atla:
+; KABUK_INDEKS konumundan itibaren boşluk (' ') karakterlerini geçer.
+; -----------------------------------------------------------------------------
+kabuk_bosluk_atla:
+    [KABUK_INDEKS] X YÜKLE
+bosluk_atla_dongu:
+    [SATIR_TAMPONU + X] T YÜKLE
+    ' ' KARŞILAŞTIR
+    bosluk_atla_bitti FARKLIYSA ATLA
+    X ARTIR
+    bosluk_atla_dongu ATLA
+bosluk_atla_bitti:
+    X [KABUK_INDEKS] SAKLA
+    DÖN
+
+; -----------------------------------------------------------------------------
+; kabuk_komut_eslesir_mi:
+; Girdi: X = şablon alt baytı, Y = şablon üst baytı
+; SATIR_TAMPONU[KABUK_INDEKS..] ile sıfır sonlu şablonu karşılaştırır.
+; Eşleşirse ve komuttan sonra '\0' veya ' ' geliyorsa:
+;   KABUK_INDEKS argümanın başına ilerletilir ve T = 1 döner.
+; Eşleşmezse: T = 0 döner (KABUK_INDEKS korunur).
+; -----------------------------------------------------------------------------
+kabuk_komut_eslesir_mi:
+    X [KABUK_SABLON_ALT] SAKLA
+    Y [KABUK_SABLON_UST] SAKLA
+    [KABUK_INDEKS] X YÜKLE
+    0 Y YÜKLE
+
+komut_esles_dongu:
+    [[KABUK_SABLON_ALT] + Y] T YÜKLE
+    0 KARŞILAŞTIR
+    komut_sablon_sonu EŞİTSE ATLA
+
+    ; Şablon karakterini geçici sakla ve tampondaki karakterle kıyasla
+    T [KABUK_HEX_GECICI] SAKLA
+    [SATIR_TAMPONU + X] T YÜKLE
+    [KABUK_HEX_GECICI] KARŞILAŞTIR
+    komut_eslesmedi FARKLIYSA ATLA
+
+    X ARTIR
+    Y ARTIR
+    komut_esles_dongu ATLA
+
+komut_sablon_sonu:
+    ; Komut kelimesi bitti; tampondaki sıradaki bayt 0 veya ' ' olmalı
+    [SATIR_TAMPONU + X] T YÜKLE
+    0 KARŞILAŞTIR
+    komut_eslesti EŞİTSE ATLA
+    ' ' KARŞILAŞTIR
+    komut_eslesti EŞİTSE ATLA
+
+komut_eslesmedi:
+    0 T YÜKLE
+    DÖN
+
+komut_eslesti:
+    X [KABUK_INDEKS] SAKLA
+    1 T YÜKLE
+    DÖN
+
+; -----------------------------------------------------------------------------
+; kabuk_hex_adres_oku:
+; KABUK_INDEKS konumundan itibaren onaltılık (isteğe bağlı 0X veya $ önekli)
+; adresi okur, KABUK_ARG_ALT ve KABUK_ARG_UST içine yazar.
+; Başarılıysa T = 1, geçersiz karakter varsa T = 0 döner.
+; -----------------------------------------------------------------------------
+kabuk_hex_adres_oku:
+    kabuk_bosluk_atla ÇAĞIR
+    [KABUK_INDEKS] X YÜKLE
+
+    ; '$' öneki var mı?
+    [SATIR_TAMPONU + X] T YÜKLE
+    '$' KARŞILAŞTIR
+    hex_dolar_atla EŞİTSE ATLA
+
+    ; '0X' öneki var mı?
+    '0' KARŞILAŞTIR
+    hex_basla FARKLIYSA ATLA
+    X ARTIR
+    [SATIR_TAMPONU + X] T YÜKLE
+    'X' KARŞILAŞTIR
+    hex_ifade_gecerli_kontrol EŞİTSE ATLA
+    X AZALT
+    hex_basla ATLA
+
+hex_dolar_atla:
+    X ARTIR
+    hex_ifade_gecerli_kontrol ATLA
+
+hex_ifade_gecerli_kontrol:
+    X ARTIR
+
+hex_basla:
+    0 T YÜKLE
+    T [KABUK_ARG_ALT] SAKLA
+    T [KABUK_ARG_UST] SAKLA
+    T [KABUK_SUTUN] SAKLA   ; Okunan hane sayısı
+
+hex_okuma_dongu:
+    [SATIR_TAMPONU + X] T YÜKLE
+    0 KARŞILAŞTIR
+    hex_okuma_sonu EŞİTSE ATLA
+    ' ' KARŞILAŞTIR
+    hex_okuma_sonu EŞİTSE ATLA
+
+    ; '0'..'9' arası mı?
+    '0' KARŞILAŞTIR
+    hex_hatali KÜÇÜKSE ATLA
+    ':' KARŞILAŞTIR         ; ':' = '9' + 1
+    hex_rakam_bulundu KÜÇÜKSE ATLA
+
+    ; 'A'..'F' arası mı?
+    'A' KARŞILAŞTIR
+    hex_hatali KÜÇÜKSE ATLA
+    'G' KARŞILAŞTIR         ; 'G' = 'F' + 1
+    hex_hatali BÜYÜK VEYA EŞİTSE ATLA
+    'A' ÇIKAR
+    10 TOPLA
+    hex_hane_ekle ATLA
+
+hex_rakam_bulundu:
+    '0' ÇIKAR
+
+hex_hane_ekle:
+    T [KABUK_HEX_GECICI] SAKLA
+
+    ; 16-bit değeri 4 bit sola kaydır (KABUK_ARG << 4)
+    4 Y YÜKLE
+hex_kaydir_4:
+    [KABUK_ARG_ALT] T YÜKLE
+    T SOLA KAYDIR
+    T [KABUK_ARG_ALT] SAKLA
+    [KABUK_ARG_UST] T YÜKLE
+    T SOLA DÖNDÜR
+    T [KABUK_ARG_UST] SAKLA
+    Y AZALT
+    hex_kaydir_4 FARKLIYSA ATLA
+
+    ; Yeni haneyi alt bayta ekle
+    [KABUK_ARG_ALT] T YÜKLE
+    [KABUK_HEX_GECICI] VEYA
+    T [KABUK_ARG_ALT] SAKLA
+
+    [KABUK_SUTUN] ARTIR
+    X ARTIR
+    hex_okuma_dongu ATLA
+
+hex_okuma_sonu:
+    [KABUK_SUTUN] T YÜKLE
+    0 KARŞILAŞTIR
+    hex_hatali EŞİTSE ATLA
+    X [KABUK_INDEKS] SAKLA
+    1 T YÜKLE
+    DÖN
+
+hex_hatali:
+    0 T YÜKLE
+    DÖN
+
+; -----------------------------------------------------------------------------
+; kabuk_hex_bayt_yaz:
+; Girdi: T = 2 haneli onaltılık olarak ekrana yazdırılacak bayt (ör. 0xA5 -> "A5")
+; -----------------------------------------------------------------------------
+kabuk_hex_bayt_yaz:
+    T İT
+    ; Üst 4 bit (nibble)
+    T SAĞA KAYDIR
+    T SAĞA KAYDIR
+    T SAĞA KAYDIR
+    T SAĞA KAYDIR
+    kabuk_hex_hane_yaz ÇAĞIR
+
+    ; Alt 4 bit (nibble)
+    T ÇEK
+    0x0F VE
+    kabuk_hex_hane_yaz ÇAĞIR
+    DÖN
+
+kabuk_hex_hane_yaz:
+    10 KARŞILAŞTIR
+    hex_hane_rakam KÜÇÜKSE ATLA
+    10 ÇIKAR
+    'A' TOPLA
+    1 SİSTEM
+    DÖN
+hex_hane_rakam:
+    '0' TOPLA
+    1 SİSTEM
+    DÖN
 
 ; =============================================================================
 ; 3. YAZILIM KESMESİ (<n> SİSTEM) GİRİŞ NOKTASI
@@ -201,56 +696,36 @@ bios_servis_tablosu:
 ; =============================================================================
 
 ; -----------------------------------------------------------------------------
-; İmleç VRAM adresini (0x8000 + satir * 40 + sutun) hesaplar.
-; IMLEC_ADRES_ALT ve IMLEC_ADRES_UST güncellenir. T yazmacını korur.
+; İmleç VRAM adresini (0x8000 + satir * 40 + sutun) tablodan hızlıca hesaplar.
+; IMLEC_ADRES_ALT ve IMLEC_ADRES_UST güncellenir. T ve X yazmaçlarını korur.
 ; -----------------------------------------------------------------------------
 imlec_adresi_hesapla:
     T İT
-    0x80 T YÜKLE
-    T [IMLEC_ADRES_UST] SAKLA
+    X İT
 
-    ; satir * 8 (0..192, tek bayta sığar)
     [IMLEC_SATIR] T YÜKLE
     T SOLA KAYDIR
-    T SOLA KAYDIR
-    T SOLA KAYDIR
-    T [IMLEC_ADRES_ALT] SAKLA
+    T X AKTAR
 
-    ; 16-bit olarak (satir * 8) değerini 2 kez sola kaydır -> satir * 32
-    T SOLA KAYDIR
-    T [IMLEC_ADRES_ALT] SAKLA
-    [IMLEC_ADRES_UST] T YÜKLE
-    0 ELDEYLE TOPLA
-    T [IMLEC_ADRES_UST] SAKLA
-
-    [IMLEC_ADRES_ALT] T YÜKLE
-    T SOLA KAYDIR
-    T [IMLEC_ADRES_ALT] SAKLA
-    [IMLEC_ADRES_UST] T YÜKLE
-    0 ELDEYLE TOPLA
-    T [IMLEC_ADRES_UST] SAKLA
-
-    ; + (satir * 8) ekle -> satir * 40
-    [IMLEC_SATIR] T YÜKLE
-    T SOLA KAYDIR
-    T SOLA KAYDIR
-    T SOLA KAYDIR
-    [IMLEC_ADRES_ALT] TOPLA
-    T [IMLEC_ADRES_ALT] SAKLA
-    [IMLEC_ADRES_UST] T YÜKLE
-    0 ELDEYLE TOPLA
-    T [IMLEC_ADRES_UST] SAKLA
-
-    ; + IMLEC_SUTUN ekle
-    [IMLEC_ADRES_ALT] T YÜKLE
+    [vram_satir_tablosu + X] T YÜKLE
     [IMLEC_SUTUN] TOPLA
     T [IMLEC_ADRES_ALT] SAKLA
-    [IMLEC_ADRES_UST] T YÜKLE
+
+    X ARTIR
+    [vram_satir_tablosu + X] T YÜKLE
     0 ELDEYLE TOPLA
     T [IMLEC_ADRES_UST] SAKLA
 
+    X ÇEK
     T ÇEK
     DÖN
+
+vram_satir_tablosu:
+    .KELİME 0x8000, 0x8028, 0x8050, 0x8078, 0x80A0
+    .KELİME 0x80C8, 0x80F0, 0x8118, 0x8140, 0x8168
+    .KELİME 0x8190, 0x81B8, 0x81E0, 0x8208, 0x8230
+    .KELİME 0x8258, 0x8280, 0x82A8, 0x82D0, 0x82F8
+    .KELİME 0x8320, 0x8348, 0x8370, 0x8398, 0x83C0
 
 ; -----------------------------------------------------------------------------
 ; Servis 0: BIOS_EKRAN_TEMIZLE
@@ -554,6 +1029,59 @@ acilis_metni:
     .METİN "     BIOS v1.0 - 31 KB SERBEST RAM      "
     .METİN "========================================"
     .METİN "HAZIR.\n"
+    .BAYT 0
+
+; Normalize edilmiş (büyük ASCII) komut şablonları
+kmt_yardim:
+    .METİN "YARDIM"
+    .BAYT 0
+kmt_temizle:
+    .METİN "TEMIZLE"
+    .BAYT 0
+kmt_bilgi:
+    .METİN "BILGI"
+    .BAYT 0
+kmt_sure:
+    .METİN "SURE"
+    .BAYT 0
+kmt_bellek:
+    .METİN "BELLEK"
+    .BAYT 0
+kmt_calistir:
+    .METİN "CALISTIR"
+    .BAYT 0
+
+metin_yardim:
+    .METİN "KOMUTLAR:\n"
+    .METİN " YARDIM        KOMUT LİSTESİ\n"
+    .METİN " TEMİZLE       EKRANI SİLER\n"
+    .METİN " BİLGİ         SİSTEM ÖZETİ\n"
+    .METİN " BELLEK [ADR]  32 BAYT DÖKÜM\n"
+    .METİN " ÇALIŞTIR [A]  ADRESİ ÇALIŞTIR\n"
+    .METİN " SÜRE          ÇALIŞMA SÜRESİ\n"
+    .BAYT 0
+
+metin_bilgi:
+    .METİN "İŞLEMCİ : TÜRK-8 (8-BİT, 91 KOMUT)\n"
+    .METİN "RAM     : 31 KB (0x0200-0x7FFF)\n"
+    .METİN "EKRAN   : 40x25 METİN (0x8000)\n"
+    .METİN "BIOS ROM: 16 KB (0xC000-0xFFFF)\n"
+    .BAYT 0
+
+metin_sure_baslik:
+    .METİN "SÜRE: "
+    .BAYT 0
+
+metin_sure_son:
+    .METİN " KARE (50 HZ)\n"
+    .BAYT 0
+
+metin_bilinmeyen:
+    .METİN "BİLİNMEYEN KOMUT! (YARDIM YAZIN)\n"
+    .BAYT 0
+
+metin_hata_adres:
+    .METİN "GEÇERSİZ ADRES!\n"
     .BAYT 0
 
 ; =============================================================================

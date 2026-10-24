@@ -53,17 +53,21 @@ class TestFaz3Bios(TurkTestCase):
         self.assertGreaterEqual(s.ses_sayisi, 1)
 
     def test_bios_isteminde_satir_girisi_ve_geri_silme(self):
-        """BIOS açılış isteminde Türkçe harf yazma, Backspace ile silme ve Enter çalışır."""
-        s = calistir_bios(
-            max_cevrim=100000,
-            ekran=True,
-            girdi="MERHABAX\x08 ŞĞİ\n",
-            dokum=[(0x0080, 16)],
-        )
+        """BIOS Servis 5 (satır oku) Türkçe harf yazma, Backspace ile silme ve Enter çalıştırır."""
+        s = calistir("""
+            .BAŞLANGIÇ 0x0200
+            0 SİSTEM
+            '>' T YÜKLE
+            1 SİSTEM
+            ' ' T YÜKLE
+            1 SİSTEM
+            5 SİSTEM
+            DUR
+        """, ekran=True, girdi="MERHABAX\x08 ŞĞİ\n", dokum=[(0x0080, 16)])
+        self.assertBitti(s)
         ekran = s.ekran_metni()
         self.assertIn("> MERHABA ŞĞİ", ekran)
-        # Alt satırda yeni istem "> _" açılmış olmalı
-        self.assertEqual(s.ekran_satirlari[6].strip(), "> _")
+        self.assertEqual(s.X, 11)
         # 0x0080 tamponunda "MERHABA ŞĞİ\0" (ISO-8859-9) bulunmalı
         beklenen = list("MERHABA ŞĞİ".encode("iso-8859-9")) + [0]
         self.assertEqual(s.bellek(0x0080, len(beklenen)), beklenen)
