@@ -30,7 +30,7 @@
 .TANIM BLOK_UZUNLUK_UST 0x0005
 
 .TANIM SATIR_TAMPONU    0x0080  ; 64 baytlık standart satır girdi tamponu (0x0080-0x00BF)
-.TANIM SATIR_MAKS_UZUN  36      ; Bir satırda okunabilecek azami karakter sayısı
+.TANIM SATIR_MAKS_UZUN  60      ; Bir satırda okunabilecek azami karakter sayısı
 .TANIM DOSYA_AD_TAMPON  0x00C0  ; 8 baytlık boşluk dolgulu dosya adı tamponu (0x00C0-0x00C7)
 .TANIM KAYNAK_TAMPON    0x6000  ; 6 KB kaynak kod düzenleyici tamponu (0x6000-0x77FF)
 .TANIM ETIKET_TABLOSU   0x7800  ; 64 girişlik (64x16=1024B) etiket/sembol tablosu (0x7800-0x7BFF)
@@ -328,7 +328,14 @@ bios_komut_dongusu:
     1 KARŞILAŞTIR
     kabuk_derle_komutu EŞİTSE ATLA
 
-    ; --- 15) Woz Tarzı Monitör Girişi: "AAAA: BB CC ..." ---
+    ; --- 15) BASIC (Diskten Türkçe BASIC Yorumlayıcısını Yükle ve Çalıştır) ---
+    <kmt_basic X YÜKLE
+    >kmt_basic Y YÜKLE
+    kabuk_komut_eslesir_mi ÇAĞIR
+    1 KARŞILAŞTIR
+    kabuk_basic_komutu EŞİTSE ATLA
+
+    ; --- 16) Woz Tarzı Monitör Girişi: "AAAA: BB CC ..." ---
     kabuk_woz_kontrol_et ÇAĞIR
     1 KARŞILAŞTIR
     bios_komut_dongusu EŞİTSE ATLA
@@ -495,6 +502,21 @@ calistir_hedefe_git:
     ; Kullanıcı programı DÖN ile biterse yeniden kabuk döngüsüne dönsün
     [KABUK_ARG_ALT] ÇAĞIR
     bios_komut_dongusu ATLA
+
+kabuk_basic_komutu:
+    ; DOSYA_AD_TAMPON içine "BASIC   " yaz, diskten yükle ve çalıştır
+    0 X YÜKLE
+basic_ad_kopyala:
+    [dosya_adi_basic + X] T YÜKLE
+    T [DOSYA_AD_TAMPON + X] SAKLA
+    X ARTIR
+    8 X KARŞILAŞTIR
+    basic_ad_kopyala FARKLIYSA ATLA
+
+    kabuk_diskten_dosya_yukle ÇAĞIR
+    0 KARŞILAŞTIR
+    bios_komut_dongusu EŞİTSE ATLA
+    calistir_hedefe_git ATLA
 
 kabuk_adres_hatasi:
     <metin_hata_adres X YÜKLE
@@ -3509,6 +3531,11 @@ kmt_kaynak:
 kmt_derle:
     .METİN "DERLE"
     .BAYT 0
+kmt_basic:
+    .METİN "BASIC"
+    .BAYT 0
+dosya_adi_basic:
+    .METİN "BASIC   "
 kmt_yeni:
     .METİN "YENI"
     .BAYT 0

@@ -17,8 +17,8 @@ $(HEDEF): $(OBJS)
 $(BIOS_ROM): roms/bios.asm araclar/derleyici.py araclar/isa.py
 	$(PYTHON) araclar/derleyici.py roms/bios.asm $(BIOS_ROM)
 
-$(DISK_IMAJI): araclar/disk.py araclar/derleyici.py programlar/merhaba.asm programlar/toplam.asm programlar/pong.asm programlar/kabuk.asm
-	$(PYTHON) araclar/disk.py olustur $(DISK_IMAJI) MERHABA:programlar/merhaba.asm TOPLAM:programlar/toplam.asm PONG:programlar/pong.asm KABUK:programlar/kabuk.asm
+$(DISK_IMAJI): araclar/disk.py araclar/derleyici.py programlar/merhaba.asm programlar/toplam.asm programlar/pong.asm programlar/kabuk.asm programlar/basic.asm
+	$(PYTHON) araclar/disk.py olustur $(DISK_IMAJI) MERHABA:programlar/merhaba.asm TOPLAM:programlar/toplam.asm PONG:programlar/pong.asm KABUK:programlar/kabuk.asm BASIC:programlar/basic.asm
 
 # Başlık dosyaları (.h) değişince .o dosyaları otomatik yeniden derlenir
 %.o: %.c $(HEADERS)

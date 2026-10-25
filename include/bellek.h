@@ -16,7 +16,7 @@ typedef struct {
     bool     klavye_tasti;       /* 16 bayt doluyken yeni tuş geldiyse true olur */
     bayt_t   klavye_tamponu;     /* Geriye dönük uyumluluk: sıradaki tuş */
     bool     klavye_hazir;       /* klavye_sayi > 0 ise true */
-    bayt_t   girdi_akisi[1024];  /* Test kipi (--girdi) için uzun girdi akış kuyruğu */
+    bayt_t   girdi_akisi[8192];  /* Test kipi (--girdi) için uzun girdi akış kuyruğu */
     uint16_t girdi_akisi_bas;
     uint16_t girdi_akisi_son;
 

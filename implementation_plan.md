@@ -13,7 +13,7 @@ flowchart LR
     F3 --> F4["Faz 4: Kabuk ✅"]
     F4 --> F5["Faz 5: Sanal disk ✅"]
     F5 --> F6["Faz 6: Monitör + assembler + editör ✅"]
-    F6 --> F7["Faz 7: Türkçe BASIC"]
+    F6 --> F7["Faz 7: Türkçe BASIC ✅"]
     F7 --> F8["Faz 8: Belgeler + CI + sürüm"]
 ```
 
@@ -128,10 +128,10 @@ Her faz **test geçmeden commit edilmez**. Test altyapısı Faz 0'da kurulur: `0
 > [!WARNING]
 > Assembler'ı 64 KB içinde, TÜRK-8 assembly'siyle yazmak en zor iş. 6c'de komut alt kümesiyle (tüm komutlar, ama sınırlı etiket/ifade) başlayıp genişletmeyi öneriyorum; gerekirse 6a/6b'de durup 6c'yi ayrı ele alırız.
 
-### Faz 7 — Türkçe BASIC
-- [ ] `SATIR 10 YAZ "MERHABA"`, `GİT`, `EĞER … İSE`, `DÖNGÜ`, `GİRDİ`, `ÇALIŞTIR`, `LİSTELE`, `YENİ`, `KAYDET/YÜKLE`, `RASTGELE`.
-- [ ] ROM 16 KB; BIOS+kabuk ~4-5 KB olacağından BASIC yorumlayıcısı **diskten yüklenen bir program** olur (`BASIC` komutu). Program alanı ~20 KB kalır.
-- [ ] Doğrulama: örnek BASIC programları (sayı tahmin, döngü) başsız testle.
+### Faz 7 — Türkçe BASIC (Tamamlandı ✅)
+- [x] `SATIR 10 YAZ "MERHABA"` / `10 "MERHABA" YAZ`, `GİT`, `EĞER … İSE`, `DÖNGÜ … BİTİŞ … SONRAKİ`, `ÇAĞIR / DÖN`, `GİRDİ`, `ÇALIŞTIR`, `LİSTELE`, `YENİ`, `KAYDET/YÜKLE`, `RASTGELE`, `SES`, `TEMİZLE`, `BİTİR`, `ÇIK`.
+- [x] BASIC yorumlayıcısı (`programlar/basic.asm`, ~3.6 KB) `disk.t8` içinden `BASIC` komutuyla yüklenir; kullanıcı BASIC programı için 22 KB (`0x1800–0x6FFF`) serbest alan kalır.
+- [x] Doğrulama: ifade hesaplama, döngü/alt program, sayı tahmin oyunu ve diske kaydet/yükle testleri (`tests/test_faz7_basic.py`).
 
 ### Faz 8 — Belgeler, CI, sürüm
 - [ ] 4 `.md` dosyası (README/OKUBENI/USER_MANUAL/KULLANIM_KILAVUZU) her faz sonunda güncellenir; ISA tablosu otomatik üretilir (elle senkron hatası olmasın).
