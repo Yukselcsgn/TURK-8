@@ -31,6 +31,8 @@
 
 .TANIM SATIR_TAMPONU    0x0080  ; 64 baytlık standart satır girdi tamponu (0x0080-0x00BF)
 .TANIM SATIR_MAKS_UZUN  36      ; Bir satırda okunabilecek azami karakter sayısı
+.TANIM DOSYA_AD_TAMPON  0x00C0  ; 8 baytlık boşluk dolgulu dosya adı tamponu (0x00C0-0x00C7)
+.TANIM DIZIN_TAMPONU    0x7F00  ; Disk 0. sektör (dizin) RAM çalışma tamponu (0x7F00-0x7FFF)
 
 ; Kabuk (Shell) Sıfır Sayfa Değişkenleri (0x00D0 - 0x00DF)
 .TANIM KABUK_SABLON_ALT 0x00D0  ; Komut şablonu işaretçisi (alt bayt)
@@ -38,9 +40,15 @@
 .TANIM KABUK_ARG_ALT    0x00D2  ; Çözümlenen 16-bit argüman adresi (alt bayt)
 .TANIM KABUK_ARG_UST    0x00D3  ; Çözümlenen 16-bit argüman adresi (üst bayt)
 .TANIM KABUK_INDEKS     0x00D4  ; Satır tamponu okuma indeksi
-.TANIM KABUK_SAYAC      0x00D5  ; BELLEK dökümü satır/bayt sayacı
-.TANIM KABUK_SUTUN      0x00D6  ; BELLEK dökümü sütun sayacı
+.TANIM KABUK_SAYAC      0x00D5  ; BELLEK/DİSK döngü sayacı
+.TANIM KABUK_SUTUN      0x00D6  ; BELLEK/DİSK sütun/hane sayacı
 .TANIM KABUK_HEX_GECICI 0x00D7  ; Hex çevrim geçici baytı
+.TANIM KABUK_ARG2_ALT   0x00D8  ; KAYDET 2. argüman (boyut) alt baytı
+.TANIM KABUK_ARG2_UST   0x00D9  ; KAYDET 2. argüman (boyut) üst baytı
+.TANIM KABUK_DIZIN_OFSET 0x00DA ; Bulunan dizin girişinin (0, 16, ..., 240) ofseti
+.TANIM KABUK_BOS_GIRIS  0x00DB  ; İlk boş dizin girişinin ofseti (0xFF = yok)
+.TANIM KABUK_SON_SEKTOR 0x00DC  ; Diskteki ilk boş veri sektörü numarası
+.TANIM KABUK_SON_KELIME 0x00DD  ; Satırdaki son kelimenin başlangıç ofseti
 
 ; BIOS Sıfır Sayfa Değişkenleri (0x00E0 - 0x00EF)
 .TANIM IMLEC_SUTUN      0x00E0  ; 0..39 arası imleç sütunu
@@ -69,6 +77,13 @@
 .TANIM PORT_TERMINAL     0xA003
 .TANIM PORT_SES_FREKANS  0xA004
 .TANIM PORT_SES_SURE     0xA005
+.TANIM PORT_DISK_KOMUT   0xA010
+.TANIM PORT_DISK_DURUM   0xA011
+.TANIM PORT_DISK_SEKTOR  0xA012
+.TANIM PORT_DISK_ADR_ALT 0xA013
+.TANIM PORT_DISK_ADR_UST 0xA014
+.TANIM PORT_DISK_SAYI    0xA015
+.TANIM PORT_DISK_HATA    0xA016
 
 .BAŞLANGIÇ 0xC000
 
@@ -207,12 +222,40 @@ bios_komut_dongusu:
     1 KARŞILAŞTIR
     kabuk_bellek_calistir EŞİTSE ATLA
 
-    ; --- 6) ÇALIŞTIR [adres] (ASCII: CALISTIR) ---
+    ; --- 6) ÇALIŞTIR [adres | dosya_adı] (ASCII: CALISTIR) ---
     <kmt_calistir X YÜKLE
     >kmt_calistir Y YÜKLE
     kabuk_komut_eslesir_mi ÇAĞIR
     1 KARŞILAŞTIR
     kabuk_calistir_komutu EŞİTSE ATLA
+
+    ; --- 7) LİSTE (ASCII: LISTE) ---
+    <kmt_liste X YÜKLE
+    >kmt_liste Y YÜKLE
+    kabuk_komut_eslesir_mi ÇAĞIR
+    1 KARŞILAŞTIR
+    kabuk_liste_komutu EŞİTSE ATLA
+
+    ; --- 8) YÜKLE <ad> (ASCII: YUKLE) ---
+    <kmt_yukle X YÜKLE
+    >kmt_yukle Y YÜKLE
+    kabuk_komut_eslesir_mi ÇAĞIR
+    1 KARŞILAŞTIR
+    kabuk_yukle_komutu EŞİTSE ATLA
+
+    ; --- 9) KAYDET <ad> [adres] [boyut] ---
+    <kmt_kaydet X YÜKLE
+    >kmt_kaydet Y YÜKLE
+    kabuk_komut_eslesir_mi ÇAĞIR
+    1 KARŞILAŞTIR
+    kabuk_kaydet_komutu EŞİTSE ATLA
+
+    ; --- 10) SİL <ad> (ASCII: SIL) ---
+    <kmt_sil X YÜKLE
+    >kmt_sil Y YÜKLE
+    kabuk_komut_eslesir_mi ÇAĞIR
+    1 KARŞILAŞTIR
+    kabuk_sil_komutu EŞİTSE ATLA
 
     ; Tanınmayan komut: hata mesajı yaz
     <metin_bilinmeyen X YÜKLE
@@ -350,10 +393,27 @@ kabuk_calistir_komutu:
     0 KARŞILAŞTIR
     calistir_hedefe_git EŞİTSE ATLA
 
+    ; Önce hex adres olarak çözümlemeyi dene (KABUK_INDEKS'i koru)
+    [KABUK_INDEKS] T YÜKLE
+    T İT
     kabuk_hex_adres_oku ÇAĞIR
     1 KARŞILAŞTIR
-    calistir_hedefe_git EŞİTSE ATLA
-    kabuk_adres_hatasi ATLA
+    calistir_hex_tamam EŞİTSE ATLA
+
+    ; Hex adres değilse diskten dosya adı olarak yükle ve çalıştır
+    T ÇEK
+    T [KABUK_INDEKS] SAKLA
+    kabuk_dosya_adi_oku ÇAĞIR
+    0 KARŞILAŞTIR
+    kabuk_adres_hatasi EŞİTSE ATLA
+
+    kabuk_diskten_dosya_yukle ÇAĞIR
+    0 KARŞILAŞTIR
+    bios_komut_dongusu EŞİTSE ATLA
+    calistir_hedefe_git ATLA
+
+calistir_hex_tamam:
+    T ÇEK
 
 calistir_hedefe_git:
     ; Kullanıcı programı DÖN ile biterse yeniden kabuk döngüsüne dönsün
@@ -363,6 +423,388 @@ calistir_hedefe_git:
 kabuk_adres_hatasi:
     <metin_hata_adres X YÜKLE
     >metin_hata_adres Y YÜKLE
+    2 SİSTEM
+    bios_komut_dongusu ATLA
+
+; -----------------------------------------------------------------------------
+; LİSTE Komutu: Diskin 0. sektöründeki dizin girişlerini listeler
+; -----------------------------------------------------------------------------
+kabuk_liste_komutu:
+    kabuk_dizin_sektoru_oku ÇAĞIR
+    0 KARŞILAŞTIR
+    bios_komut_dongusu EŞİTSE ATLA
+
+    <metin_liste_baslik X YÜKLE
+    >metin_liste_baslik Y YÜKLE
+    2 SİSTEM
+
+    0 T YÜKLE
+    T [KABUK_DIZIN_OFSET] SAKLA
+    T [KABUK_SAYAC] SAKLA       ; Bulunan dosya sayısı
+
+liste_giris_dongu:
+    [KABUK_DIZIN_OFSET] X YÜKLE
+    [DIZIN_TAMPONU + X] T YÜKLE
+    0 KARŞILAŞTIR
+    liste_sonraki_giris EŞİTSE ATLA
+    0xE5 KARŞILAŞTIR
+    liste_sonraki_giris EŞİTSE ATLA
+
+    ; Geçerli dosya bulundu: sayacı artır
+    [KABUK_SAYAC] ARTIR
+
+    ; 1) 8 karakterlik dosya adını yazdır
+    ' ' T YÜKLE
+    1 SİSTEM
+    8 T YÜKLE
+    T [KABUK_SUTUN] SAKLA
+    [KABUK_DIZIN_OFSET] X YÜKLE
+liste_ad_dongu:
+    [DIZIN_TAMPONU + X] T YÜKLE
+    X İT
+    1 SİSTEM
+    X ÇEK
+    X ARTIR
+    [KABUK_SUTUN] AZALT
+    liste_ad_dongu FARKLIYSA ATLA
+
+    ' ' T YÜKLE
+    1 SİSTEM
+    '0' T YÜKLE
+    1 SİSTEM
+    'x' T YÜKLE
+    1 SİSTEM
+
+    ; 2) Yükleme adresini (ofset + 11 üst, ofset + 10 alt) hex yazdır
+    [KABUK_DIZIN_OFSET] T YÜKLE
+    11 TOPLA
+    T X AKTAR
+    [DIZIN_TAMPONU + X] T YÜKLE
+    kabuk_hex_bayt_yaz ÇAĞIR
+
+    [KABUK_DIZIN_OFSET] T YÜKLE
+    10 TOPLA
+    T X AKTAR
+    [DIZIN_TAMPONU + X] T YÜKLE
+    kabuk_hex_bayt_yaz ÇAĞIR
+
+    ' ' T YÜKLE
+    1 SİSTEM
+    ' ' T YÜKLE
+    1 SİSTEM
+
+    ; 3) Sektör sayısını (ofset + 9) 3 haneli onluk olarak yazdır
+    [KABUK_DIZIN_OFSET] T YÜKLE
+    9 TOPLA
+    T X AKTAR
+    [DIZIN_TAMPONU + X] T YÜKLE
+    T RAKAMLARA AYIR
+    T İT
+    X İT
+    Y T AKTAR
+    1 SİSTEM
+    T ÇEK
+    1 SİSTEM
+    T ÇEK
+    1 SİSTEM
+
+    <metin_sektor_eki X YÜKLE
+    >metin_sektor_eki Y YÜKLE
+    2 SİSTEM
+
+liste_sonraki_giris:
+    [KABUK_DIZIN_OFSET] T YÜKLE
+    16 TOPLA
+    T [KABUK_DIZIN_OFSET] SAKLA
+    0 KARŞILAŞTIR
+    liste_giris_dongu FARKLIYSA ATLA
+
+    [KABUK_SAYAC] T YÜKLE
+    0 KARŞILAŞTIR
+    liste_bitti FARKLIYSA ATLA
+    <metin_disk_bos X YÜKLE
+    >metin_disk_bos Y YÜKLE
+    2 SİSTEM
+liste_bitti:
+    bios_komut_dongusu ATLA
+
+; -----------------------------------------------------------------------------
+; YÜKLE <ad> Komutu: Dosyayı diskten belleğe yükler (çalıştırmaz)
+; -----------------------------------------------------------------------------
+kabuk_yukle_komutu:
+    kabuk_dosya_adi_oku ÇAĞIR
+    0 KARŞILAŞTIR
+    kabuk_dosya_adi_hatasi EŞİTSE ATLA
+
+    kabuk_diskten_dosya_yukle ÇAĞIR
+    0 KARŞILAŞTIR
+    bios_komut_dongusu EŞİTSE ATLA
+
+    <metin_yuklendi X YÜKLE
+    >metin_yuklendi Y YÜKLE
+    2 SİSTEM
+    [KABUK_ARG_UST] T YÜKLE
+    kabuk_hex_bayt_yaz ÇAĞIR
+    [KABUK_ARG_ALT] T YÜKLE
+    kabuk_hex_bayt_yaz ÇAĞIR
+    10 T YÜKLE
+    1 SİSTEM
+    bios_komut_dongusu ATLA
+
+; -----------------------------------------------------------------------------
+; KAYDET <ad> [adres] [boyut] Komutu:
+; Bellekteki veriyi diske kaydeder (varsayılan adres=0x0200, boyut=0x0100=256B)
+; -----------------------------------------------------------------------------
+kabuk_kaydet_komutu:
+    kabuk_dosya_adi_oku ÇAĞIR
+    0 KARŞILAŞTIR
+    kabuk_dosya_adi_hatasi EŞİTSE ATLA
+
+    ; Varsayılan başlangıç adresi = 0x0200, varsayılan boyut = 0x0100 (1 sektör)
+    0x00 T YÜKLE
+    T [KABUK_ARG_ALT] SAKLA
+    0x02 T YÜKLE
+    T [KABUK_ARG_UST] SAKLA
+    0x00 T YÜKLE
+    T [KABUK_ARG2_ALT] SAKLA
+    0x01 T YÜKLE
+    T [KABUK_ARG2_UST] SAKLA
+
+    ; Opsiyonel 1. hex argüman (başlangıç adresi) var mı?
+    kabuk_bosluk_atla ÇAĞIR
+    [KABUK_INDEKS] X YÜKLE
+    [SATIR_TAMPONU + X] T YÜKLE
+    0 KARŞILAŞTIR
+    kaydet_basla EŞİTSE ATLA
+
+    kabuk_hex_adres_oku ÇAĞIR
+    0 KARŞILAŞTIR
+    kabuk_adres_hatasi EŞİTSE ATLA
+
+    ; Opsiyonel 2. hex argüman (boyut) var mı?
+    kabuk_bosluk_atla ÇAĞIR
+    [KABUK_INDEKS] X YÜKLE
+    [SATIR_TAMPONU + X] T YÜKLE
+    0 KARŞILAŞTIR
+    kaydet_basla EŞİTSE ATLA
+
+    ; İlk argümanı (başlangıç adresi) yığına koru, 2. argümanı oku
+    [KABUK_ARG_ALT] T YÜKLE
+    T İT
+    [KABUK_ARG_UST] T YÜKLE
+    T İT
+    kabuk_hex_adres_oku ÇAĞIR
+    0 KARŞILAŞTIR
+    kaydet_arg2_hata EŞİTSE ATLA
+
+    [KABUK_ARG_ALT] T YÜKLE
+    T [KABUK_ARG2_ALT] SAKLA
+    [KABUK_ARG_UST] T YÜKLE
+    T [KABUK_ARG2_UST] SAKLA
+    T ÇEK
+    T [KABUK_ARG_UST] SAKLA
+    T ÇEK
+    T [KABUK_ARG_ALT] SAKLA
+    kaydet_basla ATLA
+
+kaydet_arg2_hata:
+    T ÇEK
+    T ÇEK
+    kabuk_adres_hatasi ATLA
+
+kaydet_basla:
+    ; Dizin sektörünü oku
+    kabuk_dizin_sektoru_oku ÇAĞIR
+    0 KARŞILAŞTIR
+    bios_komut_dongusu EŞİTSE ATLA
+
+    ; Aynı isimde dosya zaten varsa önce sil (üzerine yazma desteği)
+    kabuk_dizinde_dosya_ara ÇAĞIR
+    1 KARŞILAŞTIR
+    kaydet_eskiyi_sil EŞİTSE ATLA
+    kaydet_yer_bul ATLA
+
+kaydet_eskiyi_sil:
+    [KABUK_DIZIN_OFSET] X YÜKLE
+    0xE5 T YÜKLE
+    T [DIZIN_TAMPONU + X] SAKLA
+
+kaydet_yer_bul:
+    ; İlk boş dizin girişini (KABUK_BOS_GIRIS) ve boş veri sektörünü (KABUK_SON_SEKTOR) bul
+    0xFF T YÜKLE
+    T [KABUK_BOS_GIRIS] SAKLA
+    1 T YÜKLE
+    T [KABUK_SON_SEKTOR] SAKLA
+    0 T YÜKLE
+    T [KABUK_DIZIN_OFSET] SAKLA
+
+kaydet_tara_dongu:
+    [KABUK_DIZIN_OFSET] X YÜKLE
+    [DIZIN_TAMPONU + X] T YÜKLE
+    0 KARŞILAŞTIR
+    kaydet_bos_aday EŞİTSE ATLA
+    0xE5 KARŞILAŞTIR
+    kaydet_bos_aday EŞİTSE ATLA
+
+    ; Dolu giriş: bitiş sektörü = baslangic (ofset+8) + sayi (ofset+9)
+    [KABUK_DIZIN_OFSET] T YÜKLE
+    8 TOPLA
+    T X AKTAR
+    [DIZIN_TAMPONU + X] T YÜKLE
+    T [KABUK_HEX_GECICI] SAKLA
+    X ARTIR
+    [DIZIN_TAMPONU + X] T YÜKLE
+    [KABUK_HEX_GECICI] TOPLA
+    [KABUK_SON_SEKTOR] KARŞILAŞTIR
+    kaydet_tara_sonraki KÜÇÜK VEYA EŞİTSE ATLA
+    T [KABUK_SON_SEKTOR] SAKLA
+    kaydet_tara_sonraki ATLA
+
+kaydet_bos_aday:
+    [KABUK_BOS_GIRIS] T YÜKLE
+    0xFF KARŞILAŞTIR
+    kaydet_tara_sonraki FARKLIYSA ATLA
+    [KABUK_DIZIN_OFSET] T YÜKLE
+    T [KABUK_BOS_GIRIS] SAKLA
+
+kaydet_tara_sonraki:
+    [KABUK_DIZIN_OFSET] T YÜKLE
+    16 TOPLA
+    T [KABUK_DIZIN_OFSET] SAKLA
+    0 KARŞILAŞTIR
+    kaydet_tara_dongu FARKLIYSA ATLA
+
+    ; Boş dizin girişi bulundu mu?
+    [KABUK_BOS_GIRIS] T YÜKLE
+    0xFF KARŞILAŞTIR
+    kabuk_disk_dolu_hatasi EŞİTSE ATLA
+
+    ; Sektör sayısını hesapla: üst_bayt + (alt_bayt > 0 ? 1 : 0), en az 1
+    [KABUK_ARG2_UST] T YÜKLE
+    T [KABUK_SAYAC] SAKLA
+    [KABUK_ARG2_ALT] T YÜKLE
+    0 KARŞILAŞTIR
+    kaydet_sektor_kontrol EŞİTSE ATLA
+    [KABUK_SAYAC] ARTIR
+kaydet_sektor_kontrol:
+    [KABUK_SAYAC] T YÜKLE
+    0 KARŞILAŞTIR
+    kaydet_veri_yaz FARKLIYSA ATLA
+    1 T YÜKLE
+    T [KABUK_SAYAC] SAKLA
+    T [KABUK_ARG2_UST] SAKLA
+
+kaydet_veri_yaz:
+    ; Veri sektörlerini diske yaz
+    [KABUK_SON_SEKTOR] T YÜKLE
+    T [PORT_DISK_SEKTOR] SAKLA
+    [KABUK_ARG_ALT] T YÜKLE
+    T [PORT_DISK_ADR_ALT] SAKLA
+    [KABUK_ARG_UST] T YÜKLE
+    T [PORT_DISK_ADR_UST] SAKLA
+    [KABUK_SAYAC] T YÜKLE
+    T [PORT_DISK_SAYI] SAKLA
+    2 T YÜKLE
+    T [PORT_DISK_KOMUT] SAKLA
+    [PORT_DISK_DURUM] T YÜKLE
+    0 KARŞILAŞTIR
+    kabuk_disk_hatasi FARKLIYSA ATLA
+
+    ; Dizin girişini doldur (16 bayt)
+    [KABUK_BOS_GIRIS] X YÜKLE
+    0 Y YÜKLE
+kaydet_isim_kopyala:
+    [DOSYA_AD_TAMPON + Y] T YÜKLE
+    T [DIZIN_TAMPONU + X] SAKLA
+    X ARTIR
+    Y ARTIR
+    8 Y KARŞILAŞTIR
+    kaydet_isim_kopyala FARKLIYSA ATLA
+
+    [KABUK_SON_SEKTOR] T YÜKLE
+    T [DIZIN_TAMPONU + X] SAKLA
+    X ARTIR
+    [KABUK_SAYAC] T YÜKLE
+    T [DIZIN_TAMPONU + X] SAKLA
+    X ARTIR
+    [KABUK_ARG_ALT] T YÜKLE
+    T [DIZIN_TAMPONU + X] SAKLA
+    X ARTIR
+    [KABUK_ARG_UST] T YÜKLE
+    T [DIZIN_TAMPONU + X] SAKLA
+    X ARTIR
+    [KABUK_ARG2_ALT] T YÜKLE
+    T [DIZIN_TAMPONU + X] SAKLA
+    X ARTIR
+    [KABUK_ARG2_UST] T YÜKLE
+    T [DIZIN_TAMPONU + X] SAKLA
+    X ARTIR
+    1 T YÜKLE
+    T [DIZIN_TAMPONU + X] SAKLA
+    X ARTIR
+    0 T YÜKLE
+    T [DIZIN_TAMPONU + X] SAKLA
+
+    ; Güncel dizin sektörünü (sektör 0) diske geri yaz
+    kabuk_dizin_sektoru_yaz ÇAĞIR
+    0 KARŞILAŞTIR
+    bios_komut_dongusu EŞİTSE ATLA
+
+    <metin_kaydedildi X YÜKLE
+    >metin_kaydedildi Y YÜKLE
+    2 SİSTEM
+    bios_komut_dongusu ATLA
+
+; -----------------------------------------------------------------------------
+; SİL <ad> Komutu: Dosyayı disk dizininden siler
+; -----------------------------------------------------------------------------
+kabuk_sil_komutu:
+    kabuk_dosya_adi_oku ÇAĞIR
+    0 KARŞILAŞTIR
+    kabuk_dosya_adi_hatasi EŞİTSE ATLA
+
+    kabuk_dizin_sektoru_oku ÇAĞIR
+    0 KARŞILAŞTIR
+    bios_komut_dongusu EŞİTSE ATLA
+
+    kabuk_dizinde_dosya_ara ÇAĞIR
+    0 KARŞILAŞTIR
+    kabuk_dosya_yok_hatasi EŞİTSE ATLA
+
+    [KABUK_DIZIN_OFSET] X YÜKLE
+    0xE5 T YÜKLE
+    T [DIZIN_TAMPONU + X] SAKLA
+
+    kabuk_dizin_sektoru_yaz ÇAĞIR
+    0 KARŞILAŞTIR
+    bios_komut_dongusu EŞİTSE ATLA
+
+    <metin_silindi X YÜKLE
+    >metin_silindi Y YÜKLE
+    2 SİSTEM
+    bios_komut_dongusu ATLA
+
+kabuk_dosya_adi_hatasi:
+    <metin_hata_dosya_adi X YÜKLE
+    >metin_hata_dosya_adi Y YÜKLE
+    2 SİSTEM
+    bios_komut_dongusu ATLA
+
+kabuk_dosya_yok_hatasi:
+    <metin_hata_dosya_yok X YÜKLE
+    >metin_hata_dosya_yok Y YÜKLE
+    2 SİSTEM
+    bios_komut_dongusu ATLA
+
+kabuk_disk_dolu_hatasi:
+    <metin_hata_disk_dolu X YÜKLE
+    >metin_hata_disk_dolu Y YÜKLE
+    2 SİSTEM
+    bios_komut_dongusu ATLA
+
+kabuk_disk_hatasi:
+    <metin_hata_disk X YÜKLE
+    >metin_hata_disk Y YÜKLE
     2 SİSTEM
     bios_komut_dongusu ATLA
 
@@ -475,10 +917,14 @@ bosluk_atla_bitti:
 ; -----------------------------------------------------------------------------
 ; kabuk_komut_eslesir_mi:
 ; Girdi: X = şablon alt baytı, Y = şablon üst baytı
-; SATIR_TAMPONU[KABUK_INDEKS..] ile sıfır sonlu şablonu karşılaştırır.
-; Eşleşirse ve komuttan sonra '\0' veya ' ' geliyorsa:
-;   KABUK_INDEKS argümanın başına ilerletilir ve T = 1 döner.
-; Eşleşmezse: T = 0 döner (KABUK_INDEKS korunur).
+; Hem doğal Türkçe sonda yüklem (örn. "PONG ÇALIŞTIR", "0200 BELLEK")
+; hem de önde komut ("ÇALIŞTIR PONG", "BELLEK 0200") düzenini destekler:
+;   1) Önce SATIR_TAMPONU[KABUK_INDEKS..] başlangıcında şablonu arar.
+;      Eşleşirse KABUK_INDEKS argümanın başına ilerletilir ve T = 1 döner.
+;   2) Başta eşleşmezse satırdaki SON kelimeyi kontrol eder.
+;      Son kelime şablonla eşleşirse son kelimeden önceki boşluğu '\0' yaparak
+;      argümanları satır başında bırakır, KABUK_INDEKS'i korur ve T = 1 döner.
+;   3) Hiçbiri eşleşmezse T = 0 döner.
 ; -----------------------------------------------------------------------------
 kabuk_komut_eslesir_mi:
     X [KABUK_SABLON_ALT] SAKLA
@@ -495,7 +941,7 @@ komut_esles_dongu:
     T [KABUK_HEX_GECICI] SAKLA
     [SATIR_TAMPONU + X] T YÜKLE
     [KABUK_HEX_GECICI] KARŞILAŞTIR
-    komut_eslesmedi FARKLIYSA ATLA
+    komut_sonda_dene FARKLIYSA ATLA
 
     X ARTIR
     Y ARTIR
@@ -508,6 +954,80 @@ komut_sablon_sonu:
     komut_eslesti EŞİTSE ATLA
     ' ' KARŞILAŞTIR
     komut_eslesti EŞİTSE ATLA
+
+komut_sonda_dene:
+    ; Satırın sonundaki boşlukları temizle ve son kelimenin başını bul
+    [KABUK_INDEKS] X YÜKLE
+sonda_sona_git:
+    [SATIR_TAMPONU + X] T YÜKLE
+    0 KARŞILAŞTIR
+    sonda_bosluk_budama EŞİTSE ATLA
+    X ARTIR
+    sonda_sona_git ATLA
+
+sonda_bosluk_budama:
+    [KABUK_INDEKS] T YÜKLE
+    T [KABUK_HEX_GECICI] SAKLA
+    X T AKTAR
+    [KABUK_HEX_GECICI] KARŞILAŞTIR
+    komut_eslesmedi EŞİTSE ATLA
+    X AZALT
+    [SATIR_TAMPONU + X] T YÜKLE
+    ' ' KARŞILAŞTIR
+    sonda_bosluk_koy EŞİTSE ATLA
+    X ARTIR
+    sonda_kelime_basi_bul ATLA
+
+sonda_bosluk_koy:
+    0 T YÜKLE
+    T [SATIR_TAMPONU + X] SAKLA
+    sonda_bosluk_budama ATLA
+
+sonda_kelime_basi_bul:
+    ; X şu an son kelimenin bitişindeki '\0' konumunda; geriye doğru ' ' ara
+    X AZALT
+    [KABUK_INDEKS] T YÜKLE
+    T [KABUK_HEX_GECICI] SAKLA
+    X T AKTAR
+    [KABUK_HEX_GECICI] KARŞILAŞTIR
+    komut_eslesmedi EŞİTSE ATLA     ; Boşluk yoksa tek kelimedir ve başta zaten eşleşmedi
+
+    [SATIR_TAMPONU + X] T YÜKLE
+    ' ' KARŞILAŞTIR
+    sonda_kelime_basi_bul FARKLIYSA ATLA
+
+    ; X şu an son kelimeden hemen önceki boşlukta; X+1 son kelimenin başı
+    X ARTIR
+    X [KABUK_SON_KELIME] SAKLA
+    0 Y YÜKLE
+
+sonda_kiyas_dongu:
+    [[KABUK_SABLON_ALT] + Y] T YÜKLE
+    0 KARŞILAŞTIR
+    sonda_sablon_sonu EŞİTSE ATLA
+
+    T [KABUK_HEX_GECICI] SAKLA
+    [SATIR_TAMPONU + X] T YÜKLE
+    [KABUK_HEX_GECICI] KARŞILAŞTIR
+    komut_eslesmedi FARKLIYSA ATLA
+
+    X ARTIR
+    Y ARTIR
+    sonda_kiyas_dongu ATLA
+
+sonda_sablon_sonu:
+    ; Son kelime tam olarak bitti mi?
+    [SATIR_TAMPONU + X] T YÜKLE
+    0 KARŞILAŞTIR
+    komut_eslesmedi FARKLIYSA ATLA
+
+    ; Eşleşti! Son kelimeden önceki boşluğu '\0' yap ki argümanlar orada bitsin
+    [KABUK_SON_KELIME] X YÜKLE
+    X AZALT
+    0 T YÜKLE
+    T [SATIR_TAMPONU + X] SAKLA
+    1 T YÜKLE
+    DÖN
 
 komut_eslesmedi:
     0 T YÜKLE
@@ -646,6 +1166,205 @@ kabuk_hex_hane_yaz:
 hex_hane_rakam:
     '0' TOPLA
     1 SİSTEM
+    DÖN
+
+; -----------------------------------------------------------------------------
+; kabuk_dosya_adi_oku:
+; KABUK_INDEKS konumundan itibaren boşluğa veya satır sonuna kadar olan dosya
+; adını (1..8 karakter) okur, DOSYA_AD_TAMPON (0x00C0..0x00C7) içine sağdan
+; boşluk (' ') dolgulu olarak yazar.
+; Başarılıysa T = 1, boş veya 8 karakterden uzunsa T = 0 döner.
+; -----------------------------------------------------------------------------
+kabuk_dosya_adi_oku:
+    kabuk_bosluk_atla ÇAĞIR
+
+    ; Önce 8 baytlık dosya adı tamponunu boşluk (' ') ile doldur
+    ' ' T YÜKLE
+    0 Y YÜKLE
+dosya_ad_temizle:
+    T [DOSYA_AD_TAMPON + Y] SAKLA
+    Y ARTIR
+    8 Y KARŞILAŞTIR
+    dosya_ad_temizle FARKLIYSA ATLA
+
+    [KABUK_INDEKS] X YÜKLE
+    0 Y YÜKLE
+dosya_ad_dongu:
+    [SATIR_TAMPONU + X] T YÜKLE
+    0 KARŞILAŞTIR
+    dosya_ad_bitti EŞİTSE ATLA
+    ' ' KARŞILAŞTIR
+    dosya_ad_bitti EŞİTSE ATLA
+
+    8 Y KARŞILAŞTIR
+    dosya_ad_hatali BÜYÜK VEYA EŞİTSE ATLA
+
+    T [DOSYA_AD_TAMPON + Y] SAKLA
+    X ARTIR
+    Y ARTIR
+    dosya_ad_dongu ATLA
+
+dosya_ad_bitti:
+    0 Y KARŞILAŞTIR
+    dosya_ad_hatali EŞİTSE ATLA
+    X [KABUK_INDEKS] SAKLA
+    1 T YÜKLE
+    DÖN
+
+dosya_ad_hatali:
+    0 T YÜKLE
+    DÖN
+
+; -----------------------------------------------------------------------------
+; kabuk_dizin_sektoru_oku / kabuk_dizin_sektoru_yaz:
+; Diskin 0. sektörünü (dizin tablosu) DIZIN_TAMPONU (0x7F00) adresine okur/yazar.
+; Başarılıysa T = 1, hata varsa ekrana mesaj basıp T = 0 döner.
+; -----------------------------------------------------------------------------
+kabuk_dizin_sektoru_oku:
+    0 T YÜKLE
+    T [PORT_DISK_SEKTOR] SAKLA
+    T [PORT_DISK_ADR_ALT] SAKLA
+    0x7F T YÜKLE
+    T [PORT_DISK_ADR_UST] SAKLA
+    1 T YÜKLE
+    T [PORT_DISK_SAYI] SAKLA
+    T [PORT_DISK_KOMUT] SAKLA   ; 1 = OKU
+    [PORT_DISK_DURUM] T YÜKLE
+    0 KARŞILAŞTIR
+    dizin_islem_tamam EŞİTSE ATLA
+    <metin_hata_disk X YÜKLE
+    >metin_hata_disk Y YÜKLE
+    2 SİSTEM
+    0 T YÜKLE
+    DÖN
+
+kabuk_dizin_sektoru_yaz:
+    0 T YÜKLE
+    T [PORT_DISK_SEKTOR] SAKLA
+    T [PORT_DISK_ADR_ALT] SAKLA
+    0x7F T YÜKLE
+    T [PORT_DISK_ADR_UST] SAKLA
+    1 T YÜKLE
+    T [PORT_DISK_SAYI] SAKLA
+    2 T YÜKLE
+    T [PORT_DISK_KOMUT] SAKLA   ; 2 = YAZ
+    [PORT_DISK_DURUM] T YÜKLE
+    0 KARŞILAŞTIR
+    dizin_islem_tamam EŞİTSE ATLA
+    <metin_hata_disk X YÜKLE
+    >metin_hata_disk Y YÜKLE
+    2 SİSTEM
+    0 T YÜKLE
+    DÖN
+
+dizin_islem_tamam:
+    1 T YÜKLE
+    DÖN
+
+; -----------------------------------------------------------------------------
+; kabuk_dizinde_dosya_ara:
+; DIZIN_TAMPONU içindeki 16 girişi tarayarak DOSYA_AD_TAMPON ile eşleşen
+; dosyayı arar. Bulursa KABUK_DIZIN_OFSET = giriş ofseti (0..240) ve T = 1 döner.
+; Bulamazsa T = 0 döner.
+; -----------------------------------------------------------------------------
+kabuk_dizinde_dosya_ara:
+    0 T YÜKLE
+    T [KABUK_DIZIN_OFSET] SAKLA
+
+dizin_ara_dongu:
+    [KABUK_DIZIN_OFSET] X YÜKLE
+    [DIZIN_TAMPONU + X] T YÜKLE
+    0 KARŞILAŞTIR
+    dizin_ara_sonraki EŞİTSE ATLA
+    0xE5 KARŞILAŞTIR
+    dizin_ara_sonraki EŞİTSE ATLA
+
+    ; 8 baytlık dosya adını karşılaştır
+    0 Y YÜKLE
+dizin_isim_kiyas:
+    [DOSYA_AD_TAMPON + Y] T YÜKLE
+    T [KABUK_HEX_GECICI] SAKLA
+    [DIZIN_TAMPONU + X] T YÜKLE
+    [KABUK_HEX_GECICI] KARŞILAŞTIR
+    dizin_ara_sonraki FARKLIYSA ATLA
+    X ARTIR
+    Y ARTIR
+    8 Y KARŞILAŞTIR
+    dizin_isim_kiyas FARKLIYSA ATLA
+
+    ; Eşleşti!
+    1 T YÜKLE
+    DÖN
+
+dizin_ara_sonraki:
+    [KABUK_DIZIN_OFSET] T YÜKLE
+    16 TOPLA
+    T [KABUK_DIZIN_OFSET] SAKLA
+    0 KARŞILAŞTIR
+    dizin_ara_dongu FARKLIYSA ATLA
+
+    0 T YÜKLE
+    DÖN
+
+; -----------------------------------------------------------------------------
+; kabuk_diskten_dosya_yukle:
+; DOSYA_AD_TAMPON içindeki dosyayı dizinde bulur ve hedef RAM adresine yükler.
+; Başarılıysa KABUK_ARG_ALT/UST = yükleme adresi olur ve T = 1 döner.
+; Başarısızsa hata mesajını basar ve T = 0 döner.
+; -----------------------------------------------------------------------------
+kabuk_diskten_dosya_yukle:
+    kabuk_dizin_sektoru_oku ÇAĞIR
+    0 KARŞILAŞTIR
+    dosya_yukle_basarisiz EŞİTSE ATLA
+
+    kabuk_dizinde_dosya_ara ÇAĞIR
+    0 KARŞILAŞTIR
+    dosya_yukle_bulunamadi EŞİTSE ATLA
+
+    ; Girişten başlangıç sektörü (ofset+8), sektör sayısı (ofset+9),
+    ; yükleme adresi (ofset+10, ofset+11) bilgilerini al
+    [KABUK_DIZIN_OFSET] T YÜKLE
+    8 TOPLA
+    T X AKTAR
+    [DIZIN_TAMPONU + X] T YÜKLE
+    T [PORT_DISK_SEKTOR] SAKLA
+
+    X ARTIR
+    [DIZIN_TAMPONU + X] T YÜKLE
+    T [PORT_DISK_SAYI] SAKLA
+
+    X ARTIR
+    [DIZIN_TAMPONU + X] T YÜKLE
+    T [KABUK_ARG_ALT] SAKLA
+    T [PORT_DISK_ADR_ALT] SAKLA
+
+    X ARTIR
+    [DIZIN_TAMPONU + X] T YÜKLE
+    T [KABUK_ARG_UST] SAKLA
+    T [PORT_DISK_ADR_UST] SAKLA
+
+    1 T YÜKLE
+    T [PORT_DISK_KOMUT] SAKLA   ; 1 = OKU
+    [PORT_DISK_DURUM] T YÜKLE
+    0 KARŞILAŞTIR
+    dosya_yukle_disk_hata FARKLIYSA ATLA
+
+    1 T YÜKLE
+    DÖN
+
+dosya_yukle_bulunamadi:
+    <metin_hata_dosya_yok X YÜKLE
+    >metin_hata_dosya_yok Y YÜKLE
+    2 SİSTEM
+dosya_yukle_basarisiz:
+    0 T YÜKLE
+    DÖN
+
+dosya_yukle_disk_hata:
+    <metin_hata_disk X YÜKLE
+    >metin_hata_disk Y YÜKLE
+    2 SİSTEM
+    0 T YÜKLE
     DÖN
 
 ; =============================================================================
@@ -1050,15 +1769,31 @@ kmt_bellek:
 kmt_calistir:
     .METİN "CALISTIR"
     .BAYT 0
+kmt_liste:
+    .METİN "LISTE"
+    .BAYT 0
+kmt_yukle:
+    .METİN "YUKLE"
+    .BAYT 0
+kmt_kaydet:
+    .METİN "KAYDET"
+    .BAYT 0
+kmt_sil:
+    .METİN "SIL"
+    .BAYT 0
 
 metin_yardim:
     .METİN "KOMUTLAR:\n"
-    .METİN " YARDIM        KOMUT LİSTESİ\n"
-    .METİN " TEMİZLE       EKRANI SİLER\n"
-    .METİN " BİLGİ         SİSTEM ÖZETİ\n"
-    .METİN " BELLEK [ADR]  32 BAYT DÖKÜM\n"
-    .METİN " ÇALIŞTIR [A]  ADRESİ ÇALIŞTIR\n"
-    .METİN " SÜRE          ÇALIŞMA SÜRESİ\n"
+    .METİN " YARDIM         KOMUT LİSTESİ\n"
+    .METİN " TEMİZLE        EKRANI SİLER\n"
+    .METİN " BİLGİ          SİSTEM ÖZETİ\n"
+    .METİN " [ADR] BELLEK   32 BAYT DÖKÜM\n"
+    .METİN " <AD> ÇALIŞTIR  PROGRAMI AÇAR\n"
+    .METİN " LİSTE          DİSK DİZİNİ\n"
+    .METİN " <AD> YÜKLE     BELLEĞE YÜKLE\n"
+    .METİN " <AD> KAYDET    DİSKE KAYDET\n"
+    .METİN " <AD> SİL       DİSKTEN SİL\n"
+    .METİN " SÜRE           ÇALIŞMA SÜRESİ\n"
     .BAYT 0
 
 metin_bilgi:
@@ -1076,12 +1811,52 @@ metin_sure_son:
     .METİN " KARE (50 HZ)\n"
     .BAYT 0
 
+metin_liste_baslik:
+    .METİN "DOSYA    ADRES   BOYUT\n"
+    .BAYT 0
+
+metin_sektor_eki:
+    .METİN " SEKTÖR\n"
+    .BAYT 0
+
+metin_disk_bos:
+    .METİN " (DİSK BOŞ)\n"
+    .BAYT 0
+
+metin_yuklendi:
+    .METİN "YÜKLENDİ: 0x"
+    .BAYT 0
+
+metin_kaydedildi:
+    .METİN "DİSKE KAYDEDİLDİ.\n"
+    .BAYT 0
+
+metin_silindi:
+    .METİN "DOSYA SİLİNDİ.\n"
+    .BAYT 0
+
 metin_bilinmeyen:
     .METİN "BİLİNMEYEN KOMUT! (YARDIM YAZIN)\n"
     .BAYT 0
 
 metin_hata_adres:
     .METİN "GEÇERSİZ ADRES!\n"
+    .BAYT 0
+
+metin_hata_dosya_adi:
+    .METİN "GEÇERSİZ DOSYA ADI!\n"
+    .BAYT 0
+
+metin_hata_dosya_yok:
+    .METİN "DOSYA BULUNAMADI!\n"
+    .BAYT 0
+
+metin_hata_disk_dolu:
+    .METİN "DİSK DİZİNİ DOLU!\n"
+    .BAYT 0
+
+metin_hata_disk:
+    .METİN "DİSK HATASI!\n"
     .BAYT 0
 
 ; =============================================================================

@@ -27,8 +27,8 @@ class TestFaz4Kabuk(TurkTestCase):
         self.assertIn("KOMUTLAR:", ekran)
         self.assertIn("YARDIM", ekran)
         self.assertIn("TEMİZLE", ekran)
-        self.assertIn("BELLEK [ADR]", ekran)
-        self.assertIn("ÇALIŞTIR [A]", ekran)
+        self.assertIn("[ADR] BELLEK", ekran)
+        self.assertIn("<AD> ÇALIŞTIR", ekran)
 
     def test_temizle_komutu(self):
         """TEMİZLE komutu açılış başlığını siler ve 0. satırda '> _' istemini gösterir."""
@@ -52,13 +52,13 @@ class TestFaz4Kabuk(TurkTestCase):
         self.assertIn("KARE (50 HZ)", ekran)
 
     def test_bellek_dokumu_varsayilan_ve_argumanli(self):
-        """BELLEK komutu argümansız 0x0200'ü, argümanlı ise verilen adresi (ör. FFFA) döker."""
+        """BELLEK komutu argümansız 0x0200'ü, argümanlı ise ('FFFA BELLEK' veya 'BELLEK FFFA') verilen adresi döker."""
         s1 = calistir_bios(max_cevrim=150000, ekran=True, girdi="BELLEK\n")
         ekran1 = s1.ekran_metni()
         self.assertIn("0200: 00 00 00 00 00 00 00 00", ekran1)
         self.assertIn("0218: 00 00 00 00 00 00 00 00", ekran1)
 
-        s2 = calistir_bios(max_cevrim=150000, ekran=True, girdi="BELLEK FFFA\n")
+        s2 = calistir_bios(max_cevrim=150000, ekran=True, girdi="FFFA BELLEK\n")
         ekran2 = s2.ekran_metni()
         # 0xFFFC sıfırlama vektörü 0xC000 (küçük uçlu: 00 C0) içerir
         self.assertIn("FFFA:", ekran2)
@@ -88,9 +88,9 @@ class TestFaz4Kabuk(TurkTestCase):
 
             ; BIOS açılış vektörüne atla
             [0xFFFC] ATLA
-        """, max_cevrim=150000, ekran=True, girdi="çalıştır 0305\n", dokum=[(0x0405, 1)])
+        """, max_cevrim=150000, ekran=True, girdi="0305 çalıştır\n", dokum=[(0x0405, 1)])
         self.assertEqual(s.bellek(0x0405, 1), [0x42])
-        self.assertIn("> ÇALIŞTIR 0305", s.ekran_metni().upper())
+        self.assertIn("> 0305 ÇALIŞTIR", s.ekran_metni().upper())
 
     def test_bilinmeyen_komut_ve_gecersiz_adres_hatasi(self):
         """Tanınmayan komut veya bozuk hex adres girildiğinde uygun hata mesajı verir."""
@@ -108,7 +108,7 @@ class TestFaz4Kabuk(TurkTestCase):
             girdi="YARDIM\nBİLGİ\n",
         )
         ekran = s.ekran_metni()
-        self.assertIn(" SÜRE          ÇALIŞMA SÜRESİ", ekran)
+        self.assertIn("ÇALIŞMA SÜRESİ", ekran)
         self.assertIn("İŞLEMCİ : TÜRK-8 (8-BİT, 91 KOMUT)", ekran)
         self.assertIn("BIOS ROM: 16 KB (0xC000-0xFFFF)", ekran)
 

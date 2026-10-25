@@ -8,7 +8,7 @@ typedef struct {
     bayt_t   veri[BELLEK_BOYUTU];
     bool     rom_yazma_korumali; /* 0xC000 - 0xFFFF arasını korur */
 
-    /* 16 Baytlık Klavye FIFO Tamponu */
+    /* 16 Baytlık Klavye FIFO Tamponu + Başlangıç Girdi Akışı */
     bayt_t   klavye_fifo[KLAVYE_FIFO_BOYUTU];
     uint8_t  klavye_bas;
     uint8_t  klavye_son;
@@ -16,6 +16,9 @@ typedef struct {
     bool     klavye_tasti;       /* 16 bayt doluyken yeni tuş geldiyse true olur */
     bayt_t   klavye_tamponu;     /* Geriye dönük uyumluluk: sıradaki tuş */
     bool     klavye_hazir;       /* klavye_sayi > 0 ise true */
+    bayt_t   girdi_akisi[1024];  /* Test kipi (--girdi) için uzun girdi akış kuyruğu */
+    uint16_t girdi_akisi_bas;
+    uint16_t girdi_akisi_son;
 
     /* 50 Hz Zamanlayıcı, Ses ve Rastgele Sayı Donanımı */
     bayt_t   zamanlayici_sayaci;
@@ -34,6 +37,7 @@ typedef struct {
     bayt_t   disk_sayi;
     bayt_t   disk_hata;
     bayt_t   disk_veri;
+    char     disk_dosya_yolu[256]; /* Bağlı sanal disk imajının dosya yolu (örn. disk.t8) */
 
     /* Test modu: program PORT_TEST_SONUC'a yazınca dolar */
     bool     test_sonuc_var;
@@ -52,6 +56,7 @@ void     bellek_yaz_kelime(bellek_t *bellek, kelime_t adres, kelime_t deger);
 
 /* Yardımcılar */
 bool     bellek_yukle_ikili(bellek_t *bellek, kelime_t baslangic_adresi, const char *dosya_yolu);
+void     bellek_disk_bagla(bellek_t *bellek, const char *dosya_yolu);
 void     bellek_klavye_tusu_gonder(bellek_t *bellek, bayt_t tus);
 void     bellek_dokum_yazdir(const bellek_t *bellek, kelime_t baslangic, kelime_t uzunluk);
 

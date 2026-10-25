@@ -133,6 +133,12 @@ void islemci_kare_bildir(islemci_t *islemci) {
     if (islemci->bellek->ses_sure > 0) {
         islemci->bellek->ses_sure--;
     }
+    /* Her 50 Hz karede bekleyen girdi akışı varsa klavye FIFO tamponunu besle */
+    while (islemci->bellek->girdi_akisi_bas < islemci->bellek->girdi_akisi_son &&
+           islemci->bellek->klavye_sayi < KLAVYE_FIFO_BOYUTU) {
+        bayt_t yeni = islemci->bellek->girdi_akisi[islemci->bellek->girdi_akisi_bas++];
+        bellek_klavye_tusu_gonder(islemci->bellek, yeni);
+    }
     islemci->kare_bekliyor = false;
     islemci_kesme_uret(islemci);
 }

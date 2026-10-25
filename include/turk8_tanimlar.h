@@ -44,14 +44,24 @@ typedef int8_t    isaretli_bayt_t;  /* İşaretli 8-bit (-128 ile +127) */
 #define PORT_RASTGELE       0xA006    /* Donanım rastgele sayı üreteci portu (0-255) */
 
 /* Sanal Disk Denetleyici Port Alanı (0xA010 - 0xA017) */
-#define PORT_DISK_KOMUT     0xA010    /* Disk komutu (1: Oku, 2: Yaz, 3: Bilgi) */
-#define PORT_DISK_DURUM     0xA011    /* Disk durumu (0: Hazır, 1: Meşgul, 0xFF: Hata) */
-#define PORT_DISK_SEKTOR    0xA012    /* Sektör numarası (0 - 255) */
+#define PORT_DISK_KOMUT     0xA010    /* Disk komutu (1: Sektör Oku, 2: Sektör Yaz, 3: Durum Sorgula) */
+#define PORT_DISK_DURUM     0xA011    /* Disk durumu (0: Hazır, 1: Meşgul, 0xFF: Hata / Disk Yok) */
+#define PORT_DISK_SEKTOR    0xA012    /* Başlangıç sektör numarası (0 - 255) */
 #define PORT_DISK_ADRES_ALT 0xA013    /* DMA bellek adresi alt baytı */
 #define PORT_DISK_ADRES_UST 0xA014    /* DMA bellek adresi üst baytı */
-#define PORT_DISK_SAYI      0xA015    /* Okunacak/yazılacak sektör sayısı */
-#define PORT_DISK_HATA      0xA016    /* Son disk hata kodu */
+#define PORT_DISK_SAYI      0xA015    /* Okunacak/yazılacak sektör sayısı (0 ise 1 sektör) */
+#define PORT_DISK_HATA      0xA016    /* Son disk hata kodu (0: Yok, 1: Disk Yok, 2: Geçersiz Sektör, 3: G/Ç) */
 #define PORT_DISK_VERI      0xA017    /* Bayt akış veri portu */
+
+#define DISK_SEKTOR_BOYUTU  256       /* Her sektör 256 bayttır */
+#define DISK_TOPLAM_SEKTOR  256       /* Toplam 256 sektör (64 KB disk imajı) */
+#define DISK_KOMUT_OKU      1
+#define DISK_KOMUT_YAZ      2
+#define DISK_KOMUT_BILGI    3
+#define DISK_HATA_YOK       0
+#define DISK_HATA_DOSYA_YOK 1
+#define DISK_HATA_SEKTOR    2
+#define DISK_HATA_GC        3
 
 #define PORT_TEST_SONUC     0xA0FF    /* Test modu: 1 yazılırsa BAŞARILI, başka değer hata kodu; yazılınca çalışma biter */
 

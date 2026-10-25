@@ -12,7 +12,133 @@ void bellek_olustur(bellek_t *bellek) {
 }
 
 void bellek_sifirla(bellek_t *bellek) {
+    if (!bellek) return;
+    char kayitli_disk[256];
+    strncpy(kayitli_disk, bellek->disk_dosya_yolu, sizeof(kayitli_disk));
+    kayitli_disk[sizeof(kayitli_disk) - 1] = '\0';
     bellek_olustur(bellek);
+    strncpy(bellek->disk_dosya_yolu, kayitli_disk, sizeof(bellek->disk_dosya_yolu) - 1);
+}
+
+void bellek_disk_bagla(bellek_t *bellek, const char *dosya_yolu) {
+    if (!bellek) return;
+    if (!dosya_yolu) {
+        bellek->disk_dosya_yolu[0] = '\0';
+        return;
+    }
+    strncpy(bellek->disk_dosya_yolu, dosya_yolu, sizeof(bellek->disk_dosya_yolu) - 1);
+    bellek->disk_dosya_yolu[sizeof(bellek->disk_dosya_yolu) - 1] = '\0';
+}
+
+static void disk_komut_calistir(bellek_t *bellek, bayt_t komut) {
+    bellek->disk_komut = komut;
+    if (komut == 0) {
+        return;
+    }
+
+    if (komut == DISK_KOMUT_BILGI) {
+        if (bellek->disk_dosya_yolu[0] == '\0') {
+            bellek->disk_durum = 0xFF;
+            bellek->disk_hata = DISK_HATA_DOSYA_YOK;
+            return;
+        }
+        FILE *f = fopen(bellek->disk_dosya_yolu, "rb");
+        if (!f) {
+            bellek->disk_durum = 0xFF;
+            bellek->disk_hata = DISK_HATA_DOSYA_YOK;
+            return;
+        }
+        fclose(f);
+        bellek->disk_durum = 0;
+        bellek->disk_hata = DISK_HATA_YOK;
+        return;
+    }
+
+    if (komut != DISK_KOMUT_OKU && komut != DISK_KOMUT_YAZ) {
+        bellek->disk_durum = 0xFF;
+        bellek->disk_hata = DISK_HATA_GC;
+        return;
+    }
+
+    if (bellek->disk_dosya_yolu[0] == '\0') {
+        bellek->disk_durum = 0xFF;
+        bellek->disk_hata = DISK_HATA_DOSYA_YOK;
+        return;
+    }
+
+    uint32_t sektor_sayisi = (bellek->disk_sayi == 0) ? 1u : (uint32_t)bellek->disk_sayi;
+    uint32_t baslangic_sektor = (uint32_t)bellek->disk_sektor;
+    uint32_t dma_adres = (uint32_t)bellek->disk_adres_alt | ((uint32_t)bellek->disk_adres_ust << 8);
+    uint32_t toplam_bayt = sektor_sayisi * DISK_SEKTOR_BOYUTU;
+
+    if (baslangic_sektor + sektor_sayisi > DISK_TOPLAM_SEKTOR ||
+        dma_adres + toplam_bayt > BELLEK_BOYUTU) {
+        bellek->disk_durum = 0xFF;
+        bellek->disk_hata = DISK_HATA_SEKTOR;
+        return;
+    }
+
+    if (komut == DISK_KOMUT_OKU) {
+        if (bellek->rom_yazma_korumali && dma_adres + toplam_bayt > ADRES_ROM_BAS) {
+            bellek->disk_durum = 0xFF;
+            bellek->disk_hata = DISK_HATA_SEKTOR;
+            return;
+        }
+        FILE *f = fopen(bellek->disk_dosya_yolu, "rb");
+        if (!f) {
+            bellek->disk_durum = 0xFF;
+            bellek->disk_hata = DISK_HATA_DOSYA_YOK;
+            return;
+        }
+        if (fseek(f, (long)(baslangic_sektor * DISK_SEKTOR_BOYUTU), SEEK_SET) != 0) {
+            fclose(f);
+            bellek->disk_durum = 0xFF;
+            bellek->disk_hata = DISK_HATA_GC;
+            return;
+        }
+        memset(&bellek->veri[dma_adres], 0, toplam_bayt);
+        size_t okunan = fread(&bellek->veri[dma_adres], 1, toplam_bayt, f);
+        fclose(f);
+        if (okunan == 0 && ferror(f)) {
+            bellek->disk_durum = 0xFF;
+            bellek->disk_hata = DISK_HATA_GC;
+            return;
+        }
+        bellek->disk_durum = 0;
+        bellek->disk_hata = DISK_HATA_YOK;
+    } else if (komut == DISK_KOMUT_YAZ) {
+        FILE *f = fopen(bellek->disk_dosya_yolu, "r+b");
+        if (!f) {
+            /* İmaj henüz yoksa 64 KB sıfır dolu oluştur */
+            f = fopen(bellek->disk_dosya_yolu, "w+b");
+            if (!f) {
+                bellek->disk_durum = 0xFF;
+                bellek->disk_hata = DISK_HATA_DOSYA_YOK;
+                return;
+            }
+            bayt_t bos_sektor[DISK_SEKTOR_BOYUTU];
+            memset(bos_sektor, 0, sizeof(bos_sektor));
+            for (int s = 0; s < DISK_TOPLAM_SEKTOR; s++) {
+                fwrite(bos_sektor, 1, DISK_SEKTOR_BOYUTU, f);
+            }
+        }
+        if (fseek(f, (long)(baslangic_sektor * DISK_SEKTOR_BOYUTU), SEEK_SET) != 0) {
+            fclose(f);
+            bellek->disk_durum = 0xFF;
+            bellek->disk_hata = DISK_HATA_GC;
+            return;
+        }
+        size_t yazilan = fwrite(&bellek->veri[dma_adres], 1, toplam_bayt, f);
+        fflush(f);
+        fclose(f);
+        if (yazilan != toplam_bayt) {
+            bellek->disk_durum = 0xFF;
+            bellek->disk_hata = DISK_HATA_GC;
+            return;
+        }
+        bellek->disk_durum = 0;
+        bellek->disk_hata = DISK_HATA_YOK;
+    }
 }
 
 bayt_t bellek_oku(bellek_t *bellek, kelime_t adres) {
@@ -111,7 +237,7 @@ void bellek_yaz(bellek_t *bellek, kelime_t adres, bayt_t deger) {
             return;
 
         case PORT_DISK_KOMUT:
-            bellek->disk_komut = deger;
+            disk_komut_calistir(bellek, deger);
             return;
         case PORT_DISK_DURUM:
             bellek->disk_durum = deger;

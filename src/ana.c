@@ -18,6 +18,7 @@
 #define EN_FAZLA_DOKUM     8
 #define VARSAYILAN_MAX_CEVRIM 10000000ULL
 #define VARSAYILAN_BIOS_YOLU  "roms/bios.rom"
+#define VARSAYILAN_DISK_YOLU  "disk.t8"
 
 typedef struct {
     kelime_t adres;
@@ -38,6 +39,7 @@ static void yardim_yazdir(const char *prog_adi) {
     printf("  -d, --dokum       Program bitince 0x0200'den bellek dökümü al\n");
     printf("  -y, --yazmac      Program bitince yazmaç tablosunu göster\n");
     printf("  -a, --adres A     ROM'un yükleneceği adres (varsayılan 0x0200)\n");
+    printf("      --disk DOSYA  Sanal disk imajı yolu (varsayılan: disk.t8)\n");
     printf("  -h, --yardim      Bu yardım mesajını göster\n\n");
     printf("Test modu (başsız, makine tarafından okunabilir çıktı):\n");
     printf("  -t, --test              Başsız çalıştır; 'T8:' önekli sonuç satırları yaz\n");
@@ -133,6 +135,7 @@ static int test_modu_calistir(islemci_t *islemci, bellek_t *bellek,
 
 int main(int argc, char *argv[]) {
     const char *rom_dosyasi = NULL;
+    const char *disk_dosyasi = VARSAYILAN_DISK_YOLU;
     const char *girdi_metni = NULL;
     bool canli_modu = false;
     bool monitor_modu = false;
@@ -167,6 +170,12 @@ int main(int argc, char *argv[]) {
                 return CIKIS_ARGUMAN;
             }
             girdi_metni = argv[++i];
+        } else if (strcmp(argv[i], "--disk") == 0) {
+            if (i + 1 >= argc) {
+                fprintf(stderr, "[HATA] --disk için bir dosya yolu gerekli\n");
+                return CIKIS_ARGUMAN;
+            }
+            disk_dosyasi = argv[++i];
         } else if (strcmp(argv[i], "-a") == 0 || strcmp(argv[i], "--adres") == 0) {
             if (i + 1 >= argc || !sayi_oku(argv[++i], &yukle_adresi) || yukle_adresi > 0xFFFF) {
                 fprintf(stderr, "[HATA] --adres için 0..0xFFFF arası bir değer gerekli\n");
@@ -200,6 +209,7 @@ int main(int argc, char *argv[]) {
     /* 1. Bellek ve İşlemciyi Oluştur */
     bellek_t bellek;
     bellek_olustur(&bellek);
+    bellek_disk_bagla(&bellek, disk_dosyasi);
 
     /* Sistem BIOS ROM'u (0xC000 - 0xFFFF) mevcutsa belleğe yükle */
     bool bios_yuklendi = bellek_yukle_ikili(&bellek, ADRES_ROM_BAS, VARSAYILAN_BIOS_YOLU);
@@ -210,7 +220,7 @@ int main(int argc, char *argv[]) {
     /* VRAM'i temizle */
     ekran_temizle(&bellek);
 
-    /* Başlangıç klavye girdisi varsa FIFO tamponuna gönder (UTF-8 Türkçe -> 8-bit ISO-8859-9) */
+    /* Başlangıç klavye girdisi varsa FIFO tamponuna (16 baytı aşan kısmı girdi_akisi'na) gönder */
     if (girdi_metni) {
         for (const unsigned char *p = (const unsigned char *)girdi_metni; *p; p++) {
             bayt_t tus = (bayt_t)(*p);
@@ -221,7 +231,14 @@ int main(int argc, char *argv[]) {
                     p++;
                 }
             }
-            bellek_klavye_tusu_gonder(&bellek, tus);
+            if (bellek.klavye_sayi < KLAVYE_FIFO_BOYUTU) {
+                bellek_klavye_tusu_gonder(&bellek, tus);
+            } else {
+                bellek.klavye_tasti = true;
+                if (bellek.girdi_akisi_son < sizeof(bellek.girdi_akisi)) {
+                    bellek.girdi_akisi[bellek.girdi_akisi_son++] = tus;
+                }
+            }
         }
     }
 

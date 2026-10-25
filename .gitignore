@@ -7,7 +7,8 @@ turk8.exe
 # macOS
 .DS_Store
 
-# Derlenmiş ROM'lar (araclar/derleyici.py ile .asm'den üretilir)
+# Derlenmiş ROM'lar ve üretilen sanal disk imajı
 programlar/*.rom
 roms/*.rom
 tests/*.rom
+disk.t8

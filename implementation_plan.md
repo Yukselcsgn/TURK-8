@@ -11,7 +11,7 @@ flowchart LR
     F1 --> F2["Faz 2: Donanım ✅"]
     F2 --> F3["Faz 3: BIOS ROM + açılış ✅"]
     F3 --> F4["Faz 4: Kabuk ✅"]
-    F4 --> F5["Faz 5: Sanal disk"]
+    F4 --> F5["Faz 5: Sanal disk ✅"]
     F5 --> F6["Faz 6: Monitör + assembler + editör"]
     F6 --> F7["Faz 7: Türkçe BASIC"]
     F7 --> F8["Faz 8: Belgeler + CI + sürüm"]
@@ -116,10 +116,10 @@ Her faz **test geçmeden commit edilmez**. Test altyapısı Faz 0'da kurulur: `0
 - [x] Satır düzenleme (Backspace, Enter), küçük/büyük harf ve Türkçe karakter duyarsız komut ayrıştırıcı (`YARDIM`, `TEMİZLE`, `BİLGİ`, `BELLEK [adr]`, `ÇALIŞTIR [adr]`, `SÜRE`).
 - [x] Doğrulama: klavye girdisini besleyip çıktıyı VRAM'den doğrulayan betikli testler (`tests/test_faz4_kabuk.py`).
 
-### Faz 5 — Sanal disk
-- [ ] `disk.t8` imajı: 256 baytlık sektörler, 16 girişli basit dizin. Emülatörde disk denetleyici.
-- [ ] `araclar/disk.py`: imaj oluştur, `.rom` ekle/çıkar. Kabukta `LİSTE`, `YÜKLE`, `KAYDET`, `SİL`, `ÇALIŞTIR <ad>`.
-- [ ] Pong, merhaba vb. diskten açılır. Doğrulama: kaydet → yeniden başlat → yükle döngüsü.
+### Faz 5 — Sanal disk (Tamamlandı ✅)
+- [x] `disk.t8` imajı: 256 baytlık sektörler (256 sektör = 64 KB), 16 girişli basit dizin (sektör 0). Emülatörde DMA tabanlı disk denetleyici (`0xA010–0xA017`).
+- [x] `araclar/disk.py`: imaj oluştur (`olustur`), `.rom`/`.asm` ekle (`ekle`), çıkar (`cikar`), sil (`sil`), listele (`liste`). Kabukta `LİSTE`, `YÜKLE <ad>`, `KAYDET <ad> [adr] [boyut]`, `SİL <ad>`, `ÇALIŞTIR <ad>`.
+- [x] `MERHABA`, `TOPLAM`, `PONG`, `KABUK` varsayılan `disk.t8` imajından açılır. Doğrulama: kaydet → yeniden başlat → yükle/çalıştır döngüsü (`tests/test_faz5_disk.py`).
 
 ### Faz 6 — Makinenin içinde program yazma
 - [ ] **6a** Monitör (Woz tarzı): `0200: A9 05 ...` ile bayt girişi, bellek dökümü, çalıştır.

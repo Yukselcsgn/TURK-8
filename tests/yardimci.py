@@ -121,7 +121,7 @@ def _emulatoru_hazirla():
             "%s bulunamadı; önce 'make' çalıştırın (ya da 'make test')" % EMULATOR.name)
 
 
-def calistir_rom(rom_yolu=None, max_cevrim=200000, dokum=(), ekran=False, adres=None, girdi=None, zaman_siniri=60):
+def calistir_rom(rom_yolu=None, max_cevrim=200000, dokum=(), ekran=False, adres=None, girdi=None, disk=None, zaman_siniri=60):
     """Hazır .rom dosyasını (veya rom_yolu=None ise doğrudan BIOS ROM'u) başsız çalıştırır.
 
     dokum: [(adres, uzunluk), ...] bitişte dökülecek bellek aralıkları
@@ -130,6 +130,8 @@ def calistir_rom(rom_yolu=None, max_cevrim=200000, dokum=(), ekran=False, adres=
     komut = [str(EMULATOR), "--test", "--max-cevrim", str(max_cevrim)]
     if adres is not None:
         komut += ["--adres", "0x%04X" % adres]
+    if disk is not None:
+        komut += ["--disk", str(disk)]
     if girdi is not None:
         komut += ["--girdi", str(girdi)]
     for a, u in dokum:
@@ -145,9 +147,9 @@ def calistir_rom(rom_yolu=None, max_cevrim=200000, dokum=(), ekran=False, adres=
                  islem.stderr.decode("utf-8", errors="replace"))
 
 
-def calistir_bios(max_cevrim=30000, dokum=(), ekran=True, girdi=None):
+def calistir_bios(max_cevrim=30000, dokum=(), ekran=True, girdi=None, disk=None):
     """Argümansız olarak doğrudan BIOS ROM'dan (0xFFFC vektörü) başsız başlatır."""
-    return calistir_rom(None, max_cevrim=max_cevrim, dokum=dokum, ekran=ekran, girdi=girdi)
+    return calistir_rom(None, max_cevrim=max_cevrim, dokum=dokum, ekran=ekran, girdi=girdi, disk=disk)
 
 
 def derle_metin(kaynak, dur_ekle=True):
@@ -160,7 +162,7 @@ def derle_metin(kaynak, dur_ekle=True):
     return bytes(imaj)
 
 
-def calistir(kaynak, max_cevrim=200000, dokum=(), ekran=False, girdi=None):
+def calistir(kaynak, max_cevrim=200000, dokum=(), ekran=False, girdi=None, disk=None):
     """Assembly metnini derle + çalıştır. Başlangıç adresi 0x0200 olmalıdır.
 
     Programın sonuna DUR yazmayı unutmayın; zaman aşımı exit 3 verir.
@@ -173,7 +175,7 @@ def calistir(kaynak, max_cevrim=200000, dokum=(), ekran=False, girdi=None):
     with tempfile.TemporaryDirectory() as klasor:
         yol = Path(klasor) / "test.rom"
         yol.write_bytes(bytes(imaj))
-        return calistir_rom(yol, max_cevrim=max_cevrim, dokum=dokum, ekran=ekran, girdi=girdi)
+        return calistir_rom(yol, max_cevrim=max_cevrim, dokum=dokum, ekran=ekran, girdi=girdi, disk=disk)
 
 
 class TurkTestCase(unittest.TestCase):
