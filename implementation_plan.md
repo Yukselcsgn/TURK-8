@@ -133,10 +133,11 @@ Her faz **test geçmeden commit edilmez**. Test altyapısı Faz 0'da kurulur: `0
 - [x] BASIC yorumlayıcısı (`programlar/basic.asm`, ~3.6 KB) `disk.t8` içinden `BASIC` komutuyla yüklenir; kullanıcı BASIC programı için 22 KB (`0x1800–0x6FFF`) serbest alan kalır.
 - [x] Doğrulama: ifade hesaplama, döngü/alt program, sayı tahmin oyunu ve diske kaydet/yükle testleri (`tests/test_faz7_basic.py`).
 
-### Faz 8 — Belgeler, CI, sürüm
-- [ ] 4 `.md` dosyası (README/OKUBENI/USER_MANUAL/KULLANIM_KILAVUZU) her faz sonunda güncellenir; ISA tablosu otomatik üretilir (elle senkron hatası olmasın).
-- [ ] GitHub Actions: ubuntu + macOS + windows derleme ve `make test`.
-- [ ] Etiketli sürümler: `v0.2` (Faz 1), `v0.5` (Faz 4), `v1.0` (Faz 7).
+### Faz 8 — Belgeler, Wiki, CI, sürüm (Tamamlandı ✅)
+- [x] 4 `.md` dosyası (README/OKUBENI/USER_MANUAL/KULLANIM_KILAVUZU) güncellendi; ISA v1.0 tablosu `araclar/belge_uret.py` ile `araclar/isa.py` üzerinden otomatik üretilir (`tests/test_faz8_belgeler.py` ile senkronizasyonu doğrulanır).
+- [x] Detaylı çift dilli (Türkçe + İngilizce) GitHub Wiki sayfaları (`wiki/` altında 16 ansiklopedik sayfa: 6 Türkçe + 6 İngilizce birebir karşılık + `Home.md`, `_Sidebar.md`, `_Footer.md`, `English-Reference.md`).
+- [x] GitHub Actions (`.github/workflows/ci.yml`): ubuntu + macOS + windows derleme ve `make test`.
+- [x] Sürüm `v1.0` hazır.
 
 ---
 

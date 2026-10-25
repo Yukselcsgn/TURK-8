@@ -28,9 +28,13 @@ $(DISK_IMAJI): araclar/disk.py araclar/derleyici.py programlar/merhaba.asm progr
 test: $(HEDEF) $(BIOS_ROM) $(DISK_IMAJI)
 	$(PYTHON) -m unittest discover -s tests -v
 
+# ISA tablosundan kılavuzları ve wiki sayfalarını otomatik üretir
+belge:
+	$(PYTHON) araclar/belge_uret.py
+
 temizle:
 	rm -f src/*.o src/*.d $(HEDEF) $(BIOS_ROM) $(DISK_IMAJI)
 
 clean: temizle
 
-.PHONY: all test temizle clean
+.PHONY: all test belge temizle clean

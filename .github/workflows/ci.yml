@@ -1,0 +1,41 @@
+name: CI
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  build-and-test:
+    name: Build & Test (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Build and Test (Unix - Ubuntu / macOS)
+        if: runner.os != 'Windows'
+        run: |
+          make CC=gcc PYTHON=python3
+          make test CC=gcc PYTHON=python3
+
+      - name: Build and Test (Windows MinGW)
+        if: runner.os == 'Windows'
+        shell: bash
+        run: |
+          gcc -Wall -Wextra -std=c11 -O2 -Iinclude -o turk8.exe src/ana.c src/islemci.c src/bellek.c src/komutlar.c src/ekran.c src/ayiklayici.c
+          python araclar/derleyici.py roms/bios.asm roms/bios.rom
+          python araclar/disk.py olustur disk.t8 MERHABA:programlar/merhaba.asm TOPLAM:programlar/toplam.asm PONG:programlar/pong.asm KABUK:programlar/kabuk.asm BASIC:programlar/basic.asm
+          python -m unittest discover -s tests -v
+

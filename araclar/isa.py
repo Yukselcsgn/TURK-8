@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-TÜRK-8 komut seti tablosu — ISA v1.0 (85 komut, dondurulmuş, assembler için TEK KAYNAK).
+TÜRK-8 komut seti tablosu — ISA v1.0 (91 komut, dondurulmuş, assembler için TEK KAYNAK).
 
 Her komut bir söz dizimi deseniyle tanımlanır:
     {n}  -> 8 bitlik işlenen (1 bayt)
@@ -32,7 +32,7 @@ def katla(metin):
     return "".join(sonuc)
 
 
-# (opkod, C adı, söz dizimi deseni) — Toplam 85 komut (ISA v1.0)
+# (opkod, C adı, söz dizimi deseni) — Toplam 91 komut (ISA v1.0)
 _HAM_TABLO = [
     # 1. Sistem ve kontrol (0x00 - 0x0F)
     (0x00, "KMT_BOS",                "BOŞ"),
