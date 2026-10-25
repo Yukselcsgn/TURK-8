@@ -129,6 +129,98 @@ class TestFaz6MonitorVeKodla(TurkTestCase):
         # DUR -> 01 (1B, hatalı satır adresi ilerletmediği için 0306'ya yazılır)
         self.assertEqual(s.bellek(0x0300, 7), [0x12, 0x00, 0x04, 0x25, 0x10, 0x00, 0x01])
 
+    def test_faz6c_duzenle_etiketli_derle_ve_calistir(self):
+        """DÜZENLE ile etiketli, .TANIM, .METİN, <etiket/>etiket içeren program yazılıp DERLE ve ÇALIŞTIR ile çalışır."""
+        girdi = (
+            "DÜZENLE\n"
+            ".TANIM HEDEF 0420\n"
+            ".BAŞLANGIÇ 0300\n"
+            "0 T YÜKLE ; sayaç sıfırla\n"
+            "DÖNGÜ:\n"
+            "1 TOPLA\n"
+            "5 KARŞILAŞTIR\n"
+            "DÖNGÜ FARKLIYSA ATLA\n"
+            "T [HEDEF] SAKLA\n"
+            "<MESAJ X YÜKLE\n"
+            ">MESAJ Y YÜKLE\n"
+            "2 SİSTEM\n"
+            "DÖN\n"
+            "MESAJ:\n"
+            '.METİN "TAMAM!"\n'
+            ".BAYT 0A, 0\n"
+            "\n"
+            "KAYNAK\n"
+            "DERLE\n"
+            "ÇALIŞTIR\n"
+        )
+        s = calistir_bios(
+            max_cevrim=1200000,
+            ekran=True,
+            girdi=girdi,
+            dokum=[(0x0420, 1)],
+        )
+        ekran = s.ekran_metni()
+        self.assertIn("DERLENDİ: 0x0300 - 0x031B", ekran)
+        self.assertIn("TAMAM!", ekran)
+        self.assertEqual(s.bellek(0x0420, 1), [5])
+
+    def test_faz6c_dogrudan_diske_derle_ve_yukle(self):
+        """'<AD> DERLE' kaynak kodu derleyip diske kaydeder; yeni oturumda '<AD> ÇALIŞTIR' ile çalışır."""
+        with tempfile.TemporaryDirectory() as klasor:
+            gecici_disk = Path(klasor) / "derle_disk.t8"
+            disk.imaj_kaydet(gecici_disk, disk.bos_imaj_olustur())
+
+            girdi = (
+                "DÜZENLE\n"
+                ".BAŞLANGIÇ 0350\n"
+                "ATLA_ETIKET ATLA\n"
+                ".BAYT FF, FF\n"
+                "ATLA_ETIKET:\n"
+                "99 T YÜKLE\n"
+                "T [0450] SAKLA\n"
+                "DÖN\n"
+                ".\n"
+                "TESTPRG DERLE\n"
+            )
+            s1 = calistir_bios(
+                max_cevrim=900000,
+                ekran=True,
+                girdi=girdi,
+                disk=gecici_disk,
+            )
+            ekran1 = s1.ekran_metni()
+            self.assertIn("DERLENDİ: 0x0350 - 0x035B", ekran1)
+            self.assertIn("DİSKE KAYDEDİLDİ.", ekran1)
+
+            # Yeni oturumda diskten 'TESTPRG ÇALIŞTIR'
+            s2 = calistir_bios(
+                max_cevrim=300000,
+                ekran=True,
+                girdi="TESTPRG ÇALIŞTIR\n",
+                disk=gecici_disk,
+                dokum=[(0x0450, 1)],
+            )
+            self.assertEqual(s2.bellek(0x0450, 1), [0x99])
+
+    def test_faz6c_sil_yeni_ve_tanimsiz_etiket_hatasi(self):
+        """DÜZENLE içinde SİL son satırı siler, tanımsız etiket ise 2. geçişte satır numarasıyla hata verir."""
+        girdi = (
+            "DÜZENLE\n"
+            "YOK_ETIKET ATLA\n"
+            "SİL\n"
+            "12 T YÜKLE\n"
+            "HATALI_HEDEF ATLA\n"
+            "\n"
+            "DERLE\n"
+        )
+        s = calistir_bios(
+            max_cevrim=700000,
+            ekran=True,
+            girdi=girdi,
+        )
+        ekran = s.ekran_metni()
+        self.assertIn("SATIR 02: SÖZ DİZİMİ HATASI!", ekran)
+
 
 if __name__ == "__main__":
     unittest.main()

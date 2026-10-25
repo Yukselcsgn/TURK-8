@@ -94,7 +94,17 @@ tus_isleme:
     83 KARŞILAŞTIR
     asagi_hareket EŞİTSE ATLA
 
+    ; 'q' (113) veya 'Q' (81) basıldı mı? (BIOS kabuğuna dön)
+    113 KARŞILAŞTIR
+    oyundan_cik EŞİTSE ATLA
+    81 KARŞILAŞTIR
+    oyundan_cik EŞİTSE ATLA
+
     klavye_bitti ATLA
+
+oyundan_cik:
+    0 SİSTEM
+    DÖN
 
 yukari_hareket:
     [raket_y] T YÜKLE

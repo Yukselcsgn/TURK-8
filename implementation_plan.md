@@ -12,7 +12,7 @@ flowchart LR
     F2 --> F3["Faz 3: BIOS ROM + açılış ✅"]
     F3 --> F4["Faz 4: Kabuk ✅"]
     F4 --> F5["Faz 5: Sanal disk ✅"]
-    F5 --> F6["Faz 6: Monitör + assembler + editör"]
+    F5 --> F6["Faz 6: Monitör + assembler + editör ✅"]
     F6 --> F7["Faz 7: Türkçe BASIC"]
     F7 --> F8["Faz 8: Belgeler + CI + sürüm"]
 ```
@@ -121,10 +121,10 @@ Her faz **test geçmeden commit edilmez**. Test altyapısı Faz 0'da kurulur: `0
 - [x] `araclar/disk.py`: imaj oluştur (`olustur`), `.rom`/`.asm` ekle (`ekle`), çıkar (`cikar`), sil (`sil`), listele (`liste`). Kabukta `LİSTE`, `YÜKLE <ad>`, `KAYDET <ad> [adr] [boyut]`, `SİL <ad>`, `ÇALIŞTIR <ad>`.
 - [x] `MERHABA`, `TOPLAM`, `PONG`, `KABUK` varsayılan `disk.t8` imajından açılır. Doğrulama: kaydet → yeniden başlat → yükle/çalıştır döngüsü (`tests/test_faz5_disk.py`).
 
-### Faz 6 — Makinenin içinde program yazma
+### Faz 6 — Makinenin içinde program yazma (Tamamlandı ✅)
 - [x] **6a** Monitör (Woz tarzı): `0300: 10 2A ...` ile bayt girişi, `0300:` hızlı bellek dökümü, çalıştır.
 - [x] **6b** Satır assembler (`[adres] KODLA`): 91 ISA v1.0 komutunun tamamını ve karakter/hex işlenenleri ROM içinde satır satır makine koduna çevirir (`tests/test_faz6_monitor_kodla.py`).
-- [ ] **6c** Tam ekran editör + etiketli assembler (diske kaydeder).
+- [x] **6c** Kaynak düzenleyici (`DÜZENLE`, `KAYNAK`) + 2 geçişli etiketli assembler (`[adres | ad] DERLE`, etiketler, `.TANIM`, `.BAŞLANGIÇ`, `.METİN`, `.BAYT`, `.KELİME`, `.BOŞLUK`, `<etiket`/`>etiket` ve doğrudan diske kayıt).
 > [!WARNING]
 > Assembler'ı 64 KB içinde, TÜRK-8 assembly'siyle yazmak en zor iş. 6c'de komut alt kümesiyle (tüm komutlar, ama sınırlı etiket/ifade) başlayıp genişletmeyi öneriyorum; gerekirse 6a/6b'de durup 6c'yi ayrı ele alırız.
 

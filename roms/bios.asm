@@ -32,7 +32,30 @@
 .TANIM SATIR_TAMPONU    0x0080  ; 64 baytlık standart satır girdi tamponu (0x0080-0x00BF)
 .TANIM SATIR_MAKS_UZUN  36      ; Bir satırda okunabilecek azami karakter sayısı
 .TANIM DOSYA_AD_TAMPON  0x00C0  ; 8 baytlık boşluk dolgulu dosya adı tamponu (0x00C0-0x00C7)
+.TANIM KAYNAK_TAMPON    0x6000  ; 6 KB kaynak kod düzenleyici tamponu (0x6000-0x77FF)
+.TANIM ETIKET_TABLOSU   0x7800  ; 64 girişlik (64x16=1024B) etiket/sembol tablosu (0x7800-0x7BFF)
 .TANIM DIZIN_TAMPONU    0x7F00  ; Disk 0. sektör (dizin) RAM çalışma tamponu (0x7F00-0x7FFF)
+
+; Faz 6c — Kaynak Düzenleyici (DÜZENLE) ve İki Geçişli Derleyici (DERLE) Değişkenleri (0x0060 - 0x007F)
+.TANIM KAYNAK_SON_ALT   0x0060  ; KAYNAK_TAMPON sonundaki '\0' baytının adresi (alt)
+.TANIM KAYNAK_SON_UST   0x0061  ; KAYNAK_TAMPON sonundaki '\0' baytının adresi (üst)
+.TANIM KAYNAK_OKU_ALT   0x0062  ; DERLE / KAYNAK satır okuma işaretçisi (alt)
+.TANIM KAYNAK_OKU_UST   0x0063  ; DERLE / KAYNAK satır okuma işaretçisi (üst)
+.TANIM KAYNAK_SATIR_NO  0x0064  ; Düzenleyici / derleyici satır numarası (1..255)
+.TANIM DERLE_GECIS      0x0065  ; 0 = etkileşimli KODLA, 1 = DERLE 1. geçiş, 2 = DERLE 2. geçiş
+.TANIM DERLE_BAS_ALT    0x0066  ; Derlenen programın başlangıç adresi (alt)
+.TANIM DERLE_BAS_UST    0x0067  ; Derlenen programın başlangıç adresi (üst)
+.TANIM ETIKET_SAYISI    0x0068  ; Tablodaki kayıtlı etiket/sabit sayısı (0..64)
+.TANIM ETIKET_PTR_ALT   0x0069  ; Etiket tablosu arama/yazma işaretçisi (alt)
+.TANIM ETIKET_PTR_UST   0x006A  ; Etiket tablosu arama/yazma işaretçisi (üst)
+.TANIM DERLE_ONEK       0x006B  ; İşlenen öneki: 0 = yok, '<' = alt bayt, '>' = üst bayt
+.TANIM DERLE_KAYDET_VAR 0x006C  ; 1 ise DERLE sonrası otomatik diske kaydet
+.TANIM DERLE_SON_X      0x006D  ; Okunan sembol adının bitiş indeksi
+.TANIM DERLE_BOYUT_ALT  0x006E  ; Son derlenen programın boyutu (alt)
+.TANIM DERLE_BOYUT_UST  0x006F  ; Son derlenen programın boyutu (üst)
+.TANIM ETIKET_AD_TAMPON 0x0070  ; 14 baytlık geçici sembol adı tamponu (0x0070-0x007D)
+.TANIM DERLE_BAYT_YAZILDI 0x007E ; Geçiş içinde henüz bayt üretildi mi? (0/1)
+.TANIM DERLE_TIRNAK_DURUM 0x007F ; Yorum ayıklarken tırnak durumu (0, 34, 39)
 
 ; Kabuk (Shell) Sıfır Sayfa Değişkenleri (0x00D0 - 0x00DF)
 .TANIM KABUK_SABLON_ALT 0x00D0  ; Komut şablonu işaretçisi (alt bayt)
@@ -116,6 +139,20 @@ bios_zp_temizle:
     T [0x00FD] SAKLA
     T [0x00FE] SAKLA
     T [0x00FF] SAKLA
+
+    ; Faz 6c: Kaynak düzenleyici ve derleyici varsayılanlarını kur
+    0 T YÜKLE
+    T [KAYNAK_SON_ALT] SAKLA
+    T [DERLE_GECIS] SAKLA
+    T [DERLE_BAS_ALT] SAKLA
+    T [DERLE_BOYUT_ALT] SAKLA
+    0x60 T YÜKLE
+    T [KAYNAK_SON_UST] SAKLA
+    0x02 T YÜKLE
+    T [DERLE_BAS_UST] SAKLA
+    1 T YÜKLE
+    T [KAYNAK_SATIR_NO] SAKLA
+    T [DERLE_BOYUT_UST] SAKLA
 
     ; --- POST: Kullanıcı RAM Testi (0x0200 - 0x7FFF = 31 KB) ---
     ; Her 256 baytlık sayfanın ilk baytını 0x5A / 0xA5 deseniyle sına ve sıfırla
@@ -270,7 +307,28 @@ bios_komut_dongusu:
     1 KARŞILAŞTIR
     kabuk_kodla_komutu EŞİTSE ATLA
 
-    ; --- 12) Woz Tarzı Monitör Girişi: "AAAA: BB CC ..." ---
+    ; --- 12) [YENİ] DÜZENLE (Kaynak Kod Düzenleyici) ---
+    <kmt_duzenle X YÜKLE
+    >kmt_duzenle Y YÜKLE
+    kabuk_komut_eslesir_mi ÇAĞIR
+    1 KARŞILAŞTIR
+    kabuk_duzenle_komutu EŞİTSE ATLA
+
+    ; --- 13) KAYNAK (Kaynak Tamponunu Listele) ---
+    <kmt_kaynak X YÜKLE
+    >kmt_kaynak Y YÜKLE
+    kabuk_komut_eslesir_mi ÇAĞIR
+    1 KARŞILAŞTIR
+    kabuk_kaynak_komutu EŞİTSE ATLA
+
+    ; --- 14) [adres | dosya_adı] DERLE (İki Geçişli Etiketli Derleyici) ---
+    <kmt_derle X YÜKLE
+    >kmt_derle Y YÜKLE
+    kabuk_komut_eslesir_mi ÇAĞIR
+    1 KARŞILAŞTIR
+    kabuk_derle_komutu EŞİTSE ATLA
+
+    ; --- 15) Woz Tarzı Monitör Girişi: "AAAA: BB CC ..." ---
     kabuk_woz_kontrol_et ÇAĞIR
     1 KARŞILAŞTIR
     bios_komut_dongusu EŞİTSE ATLA
@@ -399,10 +457,10 @@ bellek_adres_artti:
     bios_komut_dongusu ATLA
 
 kabuk_calistir_komutu:
-    ; Varsayılan çalıştırma adresi: 0x0200
-    0x00 T YÜKLE
+    ; Varsayılan çalıştırma adresi: DERLE_BAS (açılışta 0x0200, DERLE sonrası derlenen adres)
+    [DERLE_BAS_ALT] T YÜKLE
     T [KABUK_ARG_ALT] SAKLA
-    0x02 T YÜKLE
+    [DERLE_BAS_UST] T YÜKLE
     T [KABUK_ARG_UST] SAKLA
 
     kabuk_bosluk_atla ÇAĞIR
@@ -578,14 +636,14 @@ kabuk_kaydet_komutu:
     0 KARŞILAŞTIR
     kabuk_dosya_adi_hatasi EŞİTSE ATLA
 
-    ; Varsayılan başlangıç adresi = 0x0200, varsayılan boyut = 0x0100 (1 sektör)
-    0x00 T YÜKLE
+    ; Varsayılan başlangıç adresi = DERLE_BAS (0x0200), boyut = DERLE_BOYUT (0x0100)
+    [DERLE_BAS_ALT] T YÜKLE
     T [KABUK_ARG_ALT] SAKLA
-    0x02 T YÜKLE
+    [DERLE_BAS_UST] T YÜKLE
     T [KABUK_ARG_UST] SAKLA
-    0x00 T YÜKLE
+    [DERLE_BOYUT_ALT] T YÜKLE
     T [KABUK_ARG2_ALT] SAKLA
-    0x01 T YÜKLE
+    [DERLE_BOYUT_UST] T YÜKLE
     T [KABUK_ARG2_UST] SAKLA
 
     ; Opsiyonel 1. hex argüman (başlangıç adresi) var mı?
@@ -1168,10 +1226,20 @@ kodla_derle_basarisiz:
 
 ; -----------------------------------------------------------------------------
 ; kodla_bayt_yaz:
-; T yazmacındaki baytı [[KODLA_PC_ALT]] adresine yazar ve KODLA_PC'yi 1 artırır.
+; T yazmacındaki baytı [[KODLA_PC_ALT]] adresine yazar (DERLE 1. geçiş hariç)
+; ve KODLA_PC'yi 1 artırır.
 ; -----------------------------------------------------------------------------
 kodla_bayt_yaz:
+    T İT
+    [DERLE_GECIS] T YÜKLE
+    1 KARŞILAŞTIR
+    kodla_bayt_sadece_say EŞİTSE ATLA
+    T ÇEK
     T [[KODLA_PC_ALT]] SAKLA
+    kodla_bayt_pc_artir ATLA
+kodla_bayt_sadece_say:
+    T ÇEK
+kodla_bayt_pc_artir:
     [KODLA_PC_ALT] ARTIR
     kodla_bayt_yaz_cik FARKLIYSA ATLA
     [KODLA_PC_UST] ARTIR
@@ -1180,18 +1248,34 @@ kodla_bayt_yaz_cik:
 
 ; -----------------------------------------------------------------------------
 ; kodla_sayi_coz:
-; SATIR_TAMPONU + X konumundan itibaren 'c' karakter sabiti veya onaltılık
-; (0X, $ veya doğrudan hex) sayıyı okur -> KODLA_DEGER_ALT / UST.
-; X yazmacını sayının sonuna ilerletir. Başarılıysa T = 1, değilse T = 0 döner.
+; SATIR_TAMPONU + X konumundan itibaren isteğe bağlı '<' (alt bayt) veya '>' (üst bayt)
+; önekli 'c' karakter sabiti, etiket/sabit adı veya onaltılık (0X, $ veya doğrudan hex)
+; sayıyı okur -> KODLA_DEGER_ALT / UST.
+; X yazmacını işlenenin sonuna ilerletir. Başarılıysa T = 1, değilse T = 0 döner.
 ; -----------------------------------------------------------------------------
 kodla_sayi_coz:
+    0 T YÜKLE
+    T [DERLE_ONEK] SAKLA
+
     ; Boşlukları geç
 kodla_sayi_bosluk:
     [SATIR_TAMPONU + X] T YÜKLE
     ' ' KARŞILAŞTIR
-    kodla_sayi_basla FARKLIYSA ATLA
+    kodla_onek_kontrol FARKLIYSA ATLA
     X ARTIR
     kodla_sayi_bosluk ATLA
+
+kodla_onek_kontrol:
+    [SATIR_TAMPONU + X] T YÜKLE
+    '<' KARŞILAŞTIR
+    kodla_onek_kaydet EŞİTSE ATLA
+    '>' KARŞILAŞTIR
+    kodla_onek_kaydet EŞİTSE ATLA
+    kodla_sayi_basla ATLA
+
+kodla_onek_kaydet:
+    T [DERLE_ONEK] SAKLA
+    X ARTIR
 
 kodla_sayi_basla:
     ; Tek tırnaklı karakter sabiti mi? ('A')
@@ -1199,6 +1283,38 @@ kodla_sayi_basla:
     39 KARŞILAŞTIR          ; 39 = '\''
     kodla_karakter_sabiti EŞİTSE ATLA
 
+    ; Başlangıç X indeksini kaydet (sembol araması veya geri dönüş için)
+    X [KABUK_SON_KELIME] SAKLA
+
+    ; Eğer DERLE kipindeysek (DERLE_GECIS != 0) ve ilk karakter 'A'..'Z' veya '_' ise
+    ; önce etiket/sabit tablosunda ara
+    [DERLE_GECIS] T YÜKLE
+    0 KARŞILAŞTIR
+    kodla_dogrudan_sayi EŞİTSE ATLA
+
+    [SATIR_TAMPONU + X] T YÜKLE
+    '_' KARŞILAŞTIR
+    kodla_sembol_dene EŞİTSE ATLA
+    'A' KARŞILAŞTIR
+    kodla_dogrudan_sayi KÜÇÜKSE ATLA
+    '[' KARŞILAŞTIR
+    kodla_dogrudan_sayi BÜYÜK VEYA EŞİTSE ATLA
+
+kodla_sembol_dene:
+    derle_etiket_adi_oku ÇAĞIR
+    0 KARŞILAŞTIR
+    kodla_sembol_degil EŞİTSE ATLA
+    X [DERLE_SON_X] SAKLA
+    derle_etiket_bul ÇAĞIR
+    1 KARŞILAŞTIR
+    kodla_sembol_bulundu EŞİTSE ATLA
+
+kodla_sembol_degil:
+    ; Tabloda bulunamadı: X'i geri yükle ve hex sayı olarak okumayı dene (ör. FF, A0)
+    [KABUK_SON_KELIME] X YÜKLE
+
+kodla_dogrudan_sayi:
+    [SATIR_TAMPONU + X] T YÜKLE
     ; '$' öneki mi?
     '$' KARŞILAŞTIR
     kodla_dolar_gec EŞİTSE ATLA
@@ -1212,6 +1328,10 @@ kodla_sayi_basla:
     kodla_0x_gec EŞİTSE ATLA
     X AZALT
     kodla_hex_dongu_hazirla ATLA
+
+kodla_sembol_bulundu:
+    [DERLE_SON_X] X YÜKLE
+    kodla_onek_uygula ATLA
 
 kodla_dolar_gec:
     X ARTIR
@@ -1236,16 +1356,18 @@ kodla_hex_okuma:
     kodla_hex_bitti EŞİTSE ATLA
     '+' KARŞILAŞTIR
     kodla_hex_bitti EŞİTSE ATLA
+    ',' KARŞILAŞTIR
+    kodla_hex_bitti EŞİTSE ATLA
 
     '0' KARŞILAŞTIR
-    kodla_sayi_hata KÜÇÜKSE ATLA
+    kodla_hex_basarisiz KÜÇÜKSE ATLA
     ':' KARŞILAŞTIR
     kodla_rakam_ekle KÜÇÜKSE ATLA
 
     'A' KARŞILAŞTIR
-    kodla_sayi_hata KÜÇÜKSE ATLA
+    kodla_hex_basarisiz KÜÇÜKSE ATLA
     'G' KARŞILAŞTIR
-    kodla_sayi_hata BÜYÜK VEYA EŞİTSE ATLA
+    kodla_hex_basarisiz BÜYÜK VEYA EŞİTSE ATLA
     'A' ÇIKAR
     10 TOPLA
     kodla_nibble_kaydir ATLA
@@ -1277,9 +1399,8 @@ kodla_kaydir_4:
 kodla_hex_bitti:
     [KABUK_SUTUN] T YÜKLE
     0 KARŞILAŞTIR
-    kodla_sayi_hata EŞİTSE ATLA
-    1 T YÜKLE
-    DÖN
+    kodla_hex_basarisiz EŞİTSE ATLA
+    kodla_onek_uygula ATLA
 
 kodla_karakter_sabiti:
     X ARTIR
@@ -1294,10 +1415,1083 @@ kodla_karakter_sabiti:
     39 KARŞILAŞTIR
     kodla_sayi_hata FARKLIYSA ATLA
     X ARTIR
+
+kodla_onek_uygula:
+    [DERLE_ONEK] T YÜKLE
+    0 KARŞILAŞTIR
+    kodla_sayi_tamam EŞİTSE ATLA
+    '<' KARŞILAŞTIR
+    kodla_onek_alt EŞİTSE ATLA
+    ; '>' öneki: üst baytı alt bayta taşı
+    [KODLA_DEGER_UST] T YÜKLE
+    T [KODLA_DEGER_ALT] SAKLA
+kodla_onek_alt:
+    0 T YÜKLE
+    T [KODLA_DEGER_UST] SAKLA
+kodla_sayi_tamam:
+    1 T YÜKLE
+    DÖN
+
+kodla_hex_basarisiz:
+    ; Eğer DERLE 1. geçişindeysek (DERLE_GECIS == 1), ileri referanslı bir etiket olabilir!
+    [DERLE_GECIS] T YÜKLE
+    1 KARŞILAŞTIR
+    kodla_sayi_hata FARKLIYSA ATLA
+
+    [KABUK_SON_KELIME] X YÜKLE
+    derle_etiket_adi_oku ÇAĞIR
+    0 KARŞILAŞTIR
+    kodla_sayi_hata EŞİTSE ATLA
+
+    0 T YÜKLE
+    T [KODLA_DEGER_ALT] SAKLA
+    T [KODLA_DEGER_UST] SAKLA
     1 T YÜKLE
     DÖN
 
 kodla_sayi_hata:
+    0 T YÜKLE
+    DÖN
+
+; =============================================================================
+; 2D. FAZ 6c — KAYNAK DÜZENLEYİCİ (DÜZENLE, KAYNAK) VE ETİKETLİ DERLEYİCİ (DERLE)
+; =============================================================================
+
+; -----------------------------------------------------------------------------
+; duzenle_tampon_sifirla:
+; KAYNAK_TAMPON (0x6000) alanını boşaltır ve satır sayacını 1 yapar.
+; -----------------------------------------------------------------------------
+duzenle_tampon_sifirla:
+    0 T YÜKLE
+    T [KAYNAK_SON_ALT] SAKLA
+    0x60 T YÜKLE
+    T [KAYNAK_SON_UST] SAKLA
+    0 T YÜKLE
+    T [[KAYNAK_SON_ALT]] SAKLA
+    1 T YÜKLE
+    T [KAYNAK_SATIR_NO] SAKLA
+    DÖN
+
+; -----------------------------------------------------------------------------
+; duzenle_sonu_hizala:
+; KAYNAK_TAMPON (0x6000) içindeki mevcut metnin sonunu ('\0') ve satır sayısını
+; hesaplayarak KAYNAK_SON_ALT/UST ve KAYNAK_SATIR_NO değerlerini günceller.
+; -----------------------------------------------------------------------------
+duzenle_sonu_hizala:
+    0 T YÜKLE
+    T [KAYNAK_SON_ALT] SAKLA
+    0x60 T YÜKLE
+    T [KAYNAK_SON_UST] SAKLA
+    1 T YÜKLE
+    T [KAYNAK_SATIR_NO] SAKLA
+
+duzenle_hizala_dongu:
+    [[KAYNAK_SON_ALT]] T YÜKLE
+    0 KARŞILAŞTIR
+    duzenle_hizala_bitti EŞİTSE ATLA
+    10 KARŞILAŞTIR
+    duzenle_hizala_ilerle FARKLIYSA ATLA
+    [KAYNAK_SATIR_NO] ARTIR
+duzenle_hizala_ilerle:
+    [KAYNAK_SON_ALT] ARTIR
+    duzenle_hizala_dongu FARKLIYSA ATLA
+    [KAYNAK_SON_UST] ARTIR
+    duzenle_hizala_dongu ATLA
+duzenle_hizala_bitti:
+    DÖN
+
+; -----------------------------------------------------------------------------
+; kabuk_duzenle_komutu:
+; Etkileşimli kaynak kod düzenleyicisini başlatır.
+; "YENİ DÜZENLE" veya "DÜZENLE YENİ" yazılırsa önce kaynak tamponunu sıfırlar.
+; -----------------------------------------------------------------------------
+kabuk_duzenle_komutu:
+    kabuk_bosluk_atla ÇAĞIR
+    [KABUK_INDEKS] X YÜKLE
+    [SATIR_TAMPONU + X] T YÜKLE
+    0 KARŞILAŞTIR
+    duzenle_mevcut_ac EŞİTSE ATLA
+
+    <kmt_yeni X YÜKLE
+    >kmt_yeni Y YÜKLE
+    kabuk_komut_eslesir_mi ÇAĞIR
+    1 KARŞILAŞTIR
+    duzenle_yeni_baslat EŞİTSE ATLA
+    duzenle_mevcut_ac ATLA
+
+duzenle_yeni_baslat:
+    duzenle_tampon_sifirla ÇAĞIR
+
+duzenle_mevcut_ac:
+    duzenle_sonu_hizala ÇAĞIR
+    <metin_duzenle_baslik X YÜKLE
+    >metin_duzenle_baslik Y YÜKLE
+    2 SİSTEM
+
+duzenle_satir_dongu:
+    ; İstem: "SS> " (SS = 2 haneli hex satır numarası)
+    [KAYNAK_SATIR_NO] T YÜKLE
+    kabuk_hex_bayt_yaz ÇAĞIR
+    '>' T YÜKLE
+    1 SİSTEM
+    ' ' T YÜKLE
+    1 SİSTEM
+
+    5 SİSTEM
+    kabuk_satir_hazirla ÇAĞIR
+
+    ; Boş satır veya "." ise düzenleyiciden çık
+    [KABUK_INDEKS] X YÜKLE
+    [SATIR_TAMPONU + X] T YÜKLE
+    0 KARŞILAŞTIR
+    duzenle_cikis EŞİTSE ATLA
+    '.' KARŞILAŞTIR
+    duzenle_nokta_kontrol EŞİTSE ATLA
+    duzenle_ozel_komutlar ATLA
+
+duzenle_nokta_kontrol:
+    X ARTIR
+    [SATIR_TAMPONU + X] T YÜKLE
+    0 KARŞILAŞTIR
+    duzenle_cikis EŞİTSE ATLA
+
+duzenle_ozel_komutlar:
+    ; "ÇIK" veya "BİTTİ" -> düzenleyiciden çık
+    <kmt_cik X YÜKLE
+    >kmt_cik Y YÜKLE
+    kabuk_komut_eslesir_mi ÇAĞIR
+    1 KARŞILAŞTIR
+    duzenle_cikis EŞİTSE ATLA
+
+    <kmt_bitti X YÜKLE
+    >kmt_bitti Y YÜKLE
+    kabuk_komut_eslesir_mi ÇAĞIR
+    1 KARŞILAŞTIR
+    duzenle_cikis EŞİTSE ATLA
+
+    ; "DERLE" yazılırsa düzenleyiciden çıkıp doğrudan derle!
+    <kmt_derle X YÜKLE
+    >kmt_derle Y YÜKLE
+    kabuk_komut_eslesir_mi ÇAĞIR
+    1 KARŞILAŞTIR
+    kabuk_derle_komutu EŞİTSE ATLA
+
+    ; "YENİ" yazılırsa tamponu sıfırla
+    <kmt_yeni X YÜKLE
+    >kmt_yeni Y YÜKLE
+    kabuk_komut_eslesir_mi ÇAĞIR
+    1 KARŞILAŞTIR
+    duzenle_ic_yeni EŞİTSE ATLA
+
+    ; "KAYNAK" yazılırsa mevcut tamponu listele
+    <kmt_kaynak X YÜKLE
+    >kmt_kaynak Y YÜKLE
+    kabuk_komut_eslesir_mi ÇAĞIR
+    1 KARŞILAŞTIR
+    duzenle_ic_kaynak EŞİTSE ATLA
+
+    ; Tek başına "SİL" yazılırsa son satırı geri sil
+    [KABUK_INDEKS] T YÜKLE
+    T İT
+    <kmt_sil X YÜKLE
+    >kmt_sil Y YÜKLE
+    kabuk_komut_eslesir_mi ÇAĞIR
+    1 KARŞILAŞTIR
+    duzenle_ic_sil_kontrol EŞİTSE ATLA
+    T ÇEK
+    T [KABUK_INDEKS] SAKLA
+    duzenle_satir_ekle ATLA
+
+duzenle_ic_sil_kontrol:
+    kabuk_bosluk_atla ÇAĞIR
+    [KABUK_INDEKS] X YÜKLE
+    [SATIR_TAMPONU + X] T YÜKLE
+    0 KARŞILAŞTIR
+    duzenle_ic_sil_yap EŞİTSE ATLA
+    T ÇEK
+    T [KABUK_INDEKS] SAKLA
+    duzenle_satir_ekle ATLA
+
+duzenle_ic_sil_yap:
+    T ÇEK
+    duzenle_son_satir_sil ÇAĞIR
+    duzenle_satir_dongu ATLA
+
+duzenle_ic_yeni:
+    duzenle_tampon_sifirla ÇAĞIR
+    duzenle_satir_dongu ATLA
+
+duzenle_ic_kaynak:
+    kaynak_listele_alt ÇAĞIR
+    duzenle_satir_dongu ATLA
+
+duzenle_satir_ekle:
+    ; SATIR_TAMPONU[KABUK_INDEKS..] içeriğini [[KAYNAK_SON_ALT]] tamponuna kopyala
+    [KABUK_INDEKS] X YÜKLE
+duzenle_kopyala_dongu:
+    [SATIR_TAMPONU + X] T YÜKLE
+    0 KARŞILAŞTIR
+    duzenle_kopyala_son EŞİTSE ATLA
+    T [[KAYNAK_SON_ALT]] SAKLA
+    [KAYNAK_SON_ALT] ARTIR
+    duzenle_kopyala_sonraki FARKLIYSA ATLA
+    [KAYNAK_SON_UST] ARTIR
+duzenle_kopyala_sonraki:
+    X ARTIR
+    duzenle_kopyala_dongu ATLA
+
+duzenle_kopyala_son:
+    ; Satır sonuna '\n' (10) ve ardından '\0' (0) koy
+    10 T YÜKLE
+    T [[KAYNAK_SON_ALT]] SAKLA
+    [KAYNAK_SON_ALT] ARTIR
+    duzenle_nl_tamam FARKLIYSA ATLA
+    [KAYNAK_SON_UST] ARTIR
+duzenle_nl_tamam:
+    0 T YÜKLE
+    T [[KAYNAK_SON_ALT]] SAKLA
+    [KAYNAK_SATIR_NO] ARTIR
+    duzenle_satir_dongu ATLA
+
+duzenle_cikis:
+    bios_komut_dongusu ATLA
+
+; -----------------------------------------------------------------------------
+; duzenle_son_satir_sil:
+; KAYNAK_TAMPON içindeki son satırı siler ve KAYNAK_SATIR_NO değerini 1 azaltır.
+; -----------------------------------------------------------------------------
+duzenle_son_satir_sil:
+    ; Tampon zaten 0x6000 başındaysa çık
+    [KAYNAK_SON_UST] T YÜKLE
+    0x60 KARŞILAŞTIR
+    duzenle_sil_geri_basla FARKLIYSA ATLA
+    [KAYNAK_SON_ALT] T YÜKLE
+    0 KARŞILAŞTIR
+    duzenle_sil_cik EŞİTSE ATLA
+
+duzenle_sil_geri_basla:
+    ; Önce son '\n' karakterinin üstüne geri gel
+    duzenle_ptr_azalt ÇAĞIR
+
+duzenle_sil_geri_dongu:
+    [KAYNAK_SON_UST] T YÜKLE
+    0x60 KARŞILAŞTIR
+    duzenle_sil_kontrol FARKLIYSA ATLA
+    [KAYNAK_SON_ALT] T YÜKLE
+    0 KARŞILAŞTIR
+    duzenle_sil_bitti EŞİTSE ATLA
+
+duzenle_sil_kontrol:
+    duzenle_ptr_azalt ÇAĞIR
+    [[KAYNAK_SON_ALT]] T YÜKLE
+    10 KARŞILAŞTIR
+    duzenle_sil_geri_dongu FARKLIYSA ATLA
+
+    ; Bir önceki satırın '\n' karakterini bulduk, 1 ileri git
+    [KAYNAK_SON_ALT] ARTIR
+    duzenle_sil_bitti FARKLIYSA ATLA
+    [KAYNAK_SON_UST] ARTIR
+
+duzenle_sil_bitti:
+    0 T YÜKLE
+    T [[KAYNAK_SON_ALT]] SAKLA
+    [KAYNAK_SATIR_NO] AZALT
+duzenle_sil_cik:
+    DÖN
+
+duzenle_ptr_azalt:
+    [KAYNAK_SON_ALT] T YÜKLE
+    0 KARŞILAŞTIR
+    duzenle_ptr_ust_azalt EŞİTSE ATLA
+    [KAYNAK_SON_ALT] AZALT
+    DÖN
+duzenle_ptr_ust_azalt:
+    [KAYNAK_SON_ALT] AZALT
+    [KAYNAK_SON_UST] AZALT
+    DÖN
+
+; -----------------------------------------------------------------------------
+; kabuk_kaynak_komutu / kaynak_listele_alt:
+; KAYNAK_TAMPON (0x6000) içindeki kaynak kodu satır numaralarıyla ekrana basar.
+; -----------------------------------------------------------------------------
+kabuk_kaynak_komutu:
+    kaynak_listele_alt ÇAĞIR
+    bios_komut_dongusu ATLA
+
+kaynak_listele_alt:
+    0 T YÜKLE
+    T [KAYNAK_OKU_ALT] SAKLA
+    0x60 T YÜKLE
+    T [KAYNAK_OKU_UST] SAKLA
+    [[KAYNAK_OKU_ALT]] T YÜKLE
+    0 KARŞILAŞTIR
+    kaynak_bos_mesaj EŞİTSE ATLA
+
+    1 T YÜKLE
+    T [KABUK_SAYAC] SAKLA   ; Satır numarası
+
+kaynak_satir_bas:
+    [[KAYNAK_OKU_ALT]] T YÜKLE
+    0 KARŞILAŞTIR
+    kaynak_listele_cik EŞİTSE ATLA
+
+    [KABUK_SAYAC] T YÜKLE
+    kabuk_hex_bayt_yaz ÇAĞIR
+    ':' T YÜKLE
+    1 SİSTEM
+    ' ' T YÜKLE
+    1 SİSTEM
+
+kaynak_karakter_dongu:
+    [[KAYNAK_OKU_ALT]] T YÜKLE
+    0 KARŞILAŞTIR
+    kaynak_son_alt_satir EŞİTSE ATLA
+
+    [KAYNAK_OKU_ALT] ARTIR
+    kaynak_oku_artti FARKLIYSA ATLA
+    [KAYNAK_OKU_UST] ARTIR
+kaynak_oku_artti:
+    10 KARŞILAŞTIR
+    kaynak_satir_sonu EŞİTSE ATLA
+    1 SİSTEM
+    kaynak_karakter_dongu ATLA
+
+kaynak_satir_sonu:
+    10 T YÜKLE
+    1 SİSTEM
+    [KABUK_SAYAC] ARTIR
+    kaynak_satir_bas ATLA
+
+kaynak_son_alt_satir:
+    10 T YÜKLE
+    1 SİSTEM
+kaynak_listele_cik:
+    DÖN
+
+kaynak_bos_mesaj:
+    <metin_kaynak_bos X YÜKLE
+    >metin_kaynak_bos Y YÜKLE
+    2 SİSTEM
+    DÖN
+
+; -----------------------------------------------------------------------------
+; kabuk_derle_komutu:
+; KAYNAK_TAMPON (0x6000) içindeki Türkçe assembly kaynak kodunu 2 geçişli olarak
+; derler.
+; Kullanım:
+;   DERLE          -> 0x0200 (veya kaynak içindeki .BAŞLANGIÇ) adresine derler
+;   0300 DERLE     -> 0x0300 adresine derler
+;   PROGRAM DERLE  -> Derler ve otomatik olarak disk.t8'e PROGRAM adıyla kaydeder
+; -----------------------------------------------------------------------------
+kabuk_derle_komutu:
+    0x00 T YÜKLE
+    T [DERLE_BAS_ALT] SAKLA
+    0x02 T YÜKLE
+    T [DERLE_BAS_UST] SAKLA
+    0 T YÜKLE
+    T [DERLE_KAYDET_VAR] SAKLA
+
+    ; Argüman var mı kontrol et
+    kabuk_bosluk_atla ÇAĞIR
+    [KABUK_INDEKS] X YÜKLE
+    [SATIR_TAMPONU + X] T YÜKLE
+    0 KARŞILAŞTIR
+    derle_tampon_kontrol EŞİTSE ATLA
+
+    ; Önce hex adres olarak dene
+    [KABUK_INDEKS] T YÜKLE
+    T İT
+    kabuk_hex_adres_oku ÇAĞIR
+    1 KARŞILAŞTIR
+    derle_arg_adres EŞİTSE ATLA
+
+    ; Hex adres değilse dosya adı olarak oku (derleme sonrası diske kaydetmek için)
+    T ÇEK
+    T [KABUK_INDEKS] SAKLA
+    kabuk_dosya_adi_oku ÇAĞIR
+    0 KARŞILAŞTIR
+    kabuk_adres_hatasi EŞİTSE ATLA
+    1 T YÜKLE
+    T [DERLE_KAYDET_VAR] SAKLA
+    derle_tampon_kontrol ATLA
+
+derle_arg_adres:
+    T ÇEK
+    [KABUK_ARG_ALT] T YÜKLE
+    T [DERLE_BAS_ALT] SAKLA
+    [KABUK_ARG_UST] T YÜKLE
+    T [DERLE_BAS_UST] SAKLA
+
+derle_tampon_kontrol:
+    ; Kaynak tamponu (0x6000) boş mu?
+    [KAYNAK_TAMPON] T YÜKLE
+    0 KARŞILAŞTIR
+    derle_gecis1_basla FARKLIYSA ATLA
+    <metin_kaynak_bos X YÜKLE
+    >metin_kaynak_bos Y YÜKLE
+    2 SİSTEM
+    bios_komut_dongusu ATLA
+
+derle_gecis1_basla:
+    ; --- 1. GEÇİŞ: Etiketleri ve sabitleri topla ---
+    0 T YÜKLE
+    T [ETIKET_SAYISI] SAKLA
+    1 T YÜKLE
+    T [DERLE_GECIS] SAKLA
+    derle_gecis_calistir ÇAĞIR
+    0 KARŞILAŞTIR
+    derle_hata_cikis EŞİTSE ATLA
+
+    ; --- 2. GEÇİŞ: Makine kodunu ve veriyi belleğe üret ---
+    2 T YÜKLE
+    T [DERLE_GECIS] SAKLA
+    derle_gecis_calistir ÇAĞIR
+    0 KARŞILAŞTIR
+    derle_hata_cikis EŞİTSE ATLA
+
+    0 T YÜKLE
+    T [DERLE_GECIS] SAKLA
+
+    ; Derlenen boyutu hesapla: DERLE_BOYUT = KODLA_PC - DERLE_BAS
+    [KODLA_PC_ALT] T YÜKLE
+    [DERLE_BAS_ALT] ÇIKAR
+    T [DERLE_BOYUT_ALT] SAKLA
+    [KODLA_PC_UST] T YÜKLE
+    derle_boyut_borc_yok ELDE VARSA ATLA
+    [DERLE_BAS_UST] ÇIKAR
+    T AZALT
+    derle_boyut_sakla ATLA
+derle_boyut_borc_yok:
+    [DERLE_BAS_UST] ÇIKAR
+derle_boyut_sakla:
+    T [DERLE_BOYUT_UST] SAKLA
+
+    ; "DERLENDİ: 0xAAAA - 0xBBBB" mesajını yazdır
+    <metin_derlendi X YÜKLE
+    >metin_derlendi Y YÜKLE
+    2 SİSTEM
+    [DERLE_BAS_UST] T YÜKLE
+    kabuk_hex_bayt_yaz ÇAĞIR
+    [DERLE_BAS_ALT] T YÜKLE
+    kabuk_hex_bayt_yaz ÇAĞIR
+    ' ' T YÜKLE
+    1 SİSTEM
+    '-' T YÜKLE
+    1 SİSTEM
+    ' ' T YÜKLE
+    1 SİSTEM
+    '0' T YÜKLE
+    1 SİSTEM
+    'x' T YÜKLE
+    1 SİSTEM
+    [KODLA_PC_UST] T YÜKLE
+    kabuk_hex_bayt_yaz ÇAĞIR
+    [KODLA_PC_ALT] T YÜKLE
+    kabuk_hex_bayt_yaz ÇAĞIR
+    10 T YÜKLE
+    1 SİSTEM
+
+    ; Dosya adı verilmişse (<AD> DERLE) otomatik olarak diske kaydet!
+    [DERLE_KAYDET_VAR] T YÜKLE
+    0 KARŞILAŞTIR
+    bios_komut_dongusu EŞİTSE ATLA
+
+    [DERLE_BAS_ALT] T YÜKLE
+    T [KABUK_ARG_ALT] SAKLA
+    [DERLE_BAS_UST] T YÜKLE
+    T [KABUK_ARG_UST] SAKLA
+    [DERLE_BOYUT_ALT] T YÜKLE
+    T [KABUK_ARG2_ALT] SAKLA
+    [DERLE_BOYUT_UST] T YÜKLE
+    T [KABUK_ARG2_UST] SAKLA
+    kaydet_basla ATLA
+
+derle_hata_cikis:
+    0 T YÜKLE
+    T [DERLE_GECIS] SAKLA
+    <metin_hata_satir X YÜKLE
+    >metin_hata_satir Y YÜKLE
+    2 SİSTEM
+    [KAYNAK_SATIR_NO] T YÜKLE
+    kabuk_hex_bayt_yaz ÇAĞIR
+    ':' T YÜKLE
+    1 SİSTEM
+    ' ' T YÜKLE
+    1 SİSTEM
+    <metin_hata_sozdizimi X YÜKLE
+    >metin_hata_sozdizimi Y YÜKLE
+    2 SİSTEM
+    bios_komut_dongusu ATLA
+
+; -----------------------------------------------------------------------------
+; derle_gecis_calistir:
+; KAYNAK_TAMPON (0x6000) başından sonuna kadar satır satır okur ve derler.
+; Başarılıysa T = 1, hata varsa T = 0 döner.
+; -----------------------------------------------------------------------------
+derle_gecis_calistir:
+    0 T YÜKLE
+    T [KAYNAK_OKU_ALT] SAKLA
+    T [DERLE_BAYT_YAZILDI] SAKLA
+    0x60 T YÜKLE
+    T [KAYNAK_OKU_UST] SAKLA
+
+    [DERLE_BAS_ALT] T YÜKLE
+    T [KODLA_PC_ALT] SAKLA
+    [DERLE_BAS_UST] T YÜKLE
+    T [KODLA_PC_UST] SAKLA
+
+    1 T YÜKLE
+    T [KAYNAK_SATIR_NO] SAKLA
+
+derle_gecis_dongu:
+    [[KAYNAK_OKU_ALT]] T YÜKLE
+    0 KARŞILAŞTIR
+    derle_gecis_tamam EŞİTSE ATLA
+
+    ; Bir satırı (yorumları ';' ayıklayarak) SATIR_TAMPONU içine kopyala
+    0 X YÜKLE
+    0 T YÜKLE
+    T [DERLE_TIRNAK_DURUM] SAKLA
+
+derle_satir_kopyala:
+    [[KAYNAK_OKU_ALT]] T YÜKLE
+    0 KARŞILAŞTIR
+    derle_kopya_bitti EŞİTSE ATLA
+
+    [KAYNAK_OKU_ALT] ARTIR
+    derle_oku_ilerledi FARKLIYSA ATLA
+    [KAYNAK_OKU_UST] ARTIR
+derle_oku_ilerledi:
+    10 KARŞILAŞTIR
+    derle_kopya_bitti EŞİTSE ATLA
+    13 KARŞILAŞTIR
+    derle_satir_kopyala EŞİTSE ATLA
+
+    ; Tırnak durumu kontrolü (' veya ")
+    T [GECICI_KARAKTER] SAKLA
+    [DERLE_TIRNAK_DURUM] T YÜKLE
+    0 KARŞILAŞTIR
+    derle_tirnak_disinda EŞİTSE ATLA
+
+    ; Tırnak içindeyiz: kapanış tırnağı mı?
+    [GECICI_KARAKTER] KARŞILAŞTIR
+    derle_karakter_ekle FARKLIYSA ATLA
+    0 T YÜKLE
+    T [DERLE_TIRNAK_DURUM] SAKLA
+    derle_karakter_ekle ATLA
+
+derle_tirnak_disinda:
+    [GECICI_KARAKTER] T YÜKLE
+    ';' KARŞILAŞTIR
+    derle_yorum_atla EŞİTSE ATLA
+    34 KARŞILAŞTIR          ; '"'
+    derle_tirnak_ac EŞİTSE ATLA
+    39 KARŞILAŞTIR          ; '\''
+    derle_tirnak_ac EŞİTSE ATLA
+    derle_karakter_ekle ATLA
+
+derle_tirnak_ac:
+    T [DERLE_TIRNAK_DURUM] SAKLA
+
+derle_karakter_ekle:
+    [GECICI_KARAKTER] T YÜKLE
+    62 X KARŞILAŞTIR
+    derle_satir_kopyala BÜYÜK VEYA EŞİTSE ATLA
+    T [SATIR_TAMPONU + X] SAKLA
+    X ARTIR
+    derle_satir_kopyala ATLA
+
+derle_yorum_atla:
+    ; Satır sonuna ('\n' veya 0) kadar kaynak işaretçisini ilerlet
+    [[KAYNAK_OKU_ALT]] T YÜKLE
+    0 KARŞILAŞTIR
+    derle_kopya_bitti EŞİTSE ATLA
+    [KAYNAK_OKU_ALT] ARTIR
+    derle_yorum_artti FARKLIYSA ATLA
+    [KAYNAK_OKU_UST] ARTIR
+derle_yorum_artti:
+    10 KARŞILAŞTIR
+    derle_yorum_atla FARKLIYSA ATLA
+
+derle_kopya_bitti:
+    0 T YÜKLE
+    T [SATIR_TAMPONU + X] SAKLA
+
+    ; Satırı normalize et ve baştaki boşlukları geç
+    kabuk_satir_hazirla ÇAĞIR
+
+    ; Satır boşsa sıradaki satıra geç
+    [KABUK_INDEKS] X YÜKLE
+    [SATIR_TAMPONU + X] T YÜKLE
+    0 KARŞILAŞTIR
+    derle_sonraki_satir EŞİTSE ATLA
+
+    derle_satir_isle ÇAĞIR
+    0 KARŞILAŞTIR
+    derle_gecis_hata EŞİTSE ATLA
+
+derle_sonraki_satir:
+    [KAYNAK_SATIR_NO] ARTIR
+    derle_gecis_dongu ATLA
+
+derle_gecis_tamam:
+    1 T YÜKLE
+    DÖN
+
+derle_gecis_hata:
+    0 T YÜKLE
+    DÖN
+
+; -----------------------------------------------------------------------------
+; derle_satir_isle:
+; SATIR_TAMPONU[KABUK_INDEKS..] içindeki tek bir kaynak satırını (etiket,
+; sözde komut veya makine komutu) işler.
+; -----------------------------------------------------------------------------
+derle_satir_isle:
+    ; 1) Satır başında "ETİKET:" tanımı var mı kontrol et
+    [KABUK_INDEKS] T YÜKLE
+    T [KABUK_SON_KELIME] SAKLA
+    T X AKTAR
+    derle_etiket_adi_oku ÇAĞIR
+    0 KARŞILAŞTIR
+    derle_etiket_degil EŞİTSE ATLA
+
+    [SATIR_TAMPONU + X] T YÜKLE
+    ':' KARŞILAŞTIR
+    derle_etiket_degil FARKLIYSA ATLA
+
+    ; ':' karakterini geç ve KABUK_INDEKS'i güncelle
+    X ARTIR
+    X [KABUK_INDEKS] SAKLA
+    kabuk_bosluk_atla ÇAĞIR
+
+    ; 1. geçişteysek etiketi KODLA_PC adresiyle tabloya kaydet
+    [DERLE_GECIS] T YÜKLE
+    1 KARŞILAŞTIR
+    derle_etiket_devam FARKLIYSA ATLA
+
+    [KODLA_PC_ALT] T YÜKLE
+    T [KODLA_DEGER_ALT] SAKLA
+    [KODLA_PC_UST] T YÜKLE
+    T [KODLA_DEGER_UST] SAKLA
+    derle_etiket_kaydet ÇAĞIR
+    0 KARŞILAŞTIR
+    derle_satir_hata EŞİTSE ATLA
+
+derle_etiket_devam:
+    ; Etiketten sonra satır bitti mi?
+    [KABUK_INDEKS] X YÜKLE
+    [SATIR_TAMPONU + X] T YÜKLE
+    0 KARŞILAŞTIR
+    derle_satir_tamam EŞİTSE ATLA
+    derle_komut_veya_direktif ATLA
+
+derle_etiket_degil:
+    [KABUK_SON_KELIME] T YÜKLE
+    T [KABUK_INDEKS] SAKLA
+
+derle_komut_veya_direktif:
+    ; 2) '.' ile başlayan sözde komut (direktif) mu?
+    [KABUK_INDEKS] X YÜKLE
+    [SATIR_TAMPONU + X] T YÜKLE
+    '.' KARŞILAŞTIR
+    derle_makine_komutu FARKLIYSA ATLA
+
+    ; .BAŞLANGIÇ <adres>
+    <drk_baslangic X YÜKLE
+    >drk_baslangic Y YÜKLE
+    kabuk_komut_eslesir_mi ÇAĞIR
+    1 KARŞILAŞTIR
+    derle_drk_baslangic EŞİTSE ATLA
+
+    ; .TANIM <ad> <değer>
+    <drk_tanim X YÜKLE
+    >drk_tanim Y YÜKLE
+    kabuk_komut_eslesir_mi ÇAĞIR
+    1 KARŞILAŞTIR
+    derle_drk_tanim EŞİTSE ATLA
+
+    ; .METİN "..."
+    <drk_metin X YÜKLE
+    >drk_metin Y YÜKLE
+    kabuk_komut_eslesir_mi ÇAĞIR
+    1 KARŞILAŞTIR
+    derle_drk_metin EŞİTSE ATLA
+
+    ; .BAYT <değer> [, <değer> ...]
+    <drk_bayt X YÜKLE
+    >drk_bayt Y YÜKLE
+    kabuk_komut_eslesir_mi ÇAĞIR
+    1 KARŞILAŞTIR
+    derle_drk_bayt EŞİTSE ATLA
+
+    ; .KELİME <değer> [, <değer> ...]
+    <drk_kelime X YÜKLE
+    >drk_kelime Y YÜKLE
+    kabuk_komut_eslesir_mi ÇAĞIR
+    1 KARŞILAŞTIR
+    derle_drk_kelime EŞİTSE ATLA
+
+    ; .BOŞLUK <boyut>
+    <drk_bosluk X YÜKLE
+    >drk_bosluk Y YÜKLE
+    kabuk_komut_eslesir_mi ÇAĞIR
+    1 KARŞILAŞTIR
+    derle_drk_bosluk EŞİTSE ATLA
+
+    derle_satir_hata ATLA
+
+derle_drk_baslangic:
+    [KABUK_INDEKS] X YÜKLE
+    kodla_sayi_coz ÇAĞIR
+    0 KARŞILAŞTIR
+    derle_satir_hata EŞİTSE ATLA
+    [KODLA_DEGER_ALT] T YÜKLE
+    T [KODLA_PC_ALT] SAKLA
+    [KODLA_DEGER_UST] T YÜKLE
+    T [KODLA_PC_UST] SAKLA
+    ; Henüz bayt üretilmediyse DERLE_BAS adresini de güncelle
+    [DERLE_BAYT_YAZILDI] T YÜKLE
+    0 KARŞILAŞTIR
+    derle_satir_tamam FARKLIYSA ATLA
+    [KODLA_DEGER_ALT] T YÜKLE
+    T [DERLE_BAS_ALT] SAKLA
+    [KODLA_DEGER_UST] T YÜKLE
+    T [DERLE_BAS_UST] SAKLA
+    derle_satir_tamam ATLA
+
+derle_drk_tanim:
+    kabuk_bosluk_atla ÇAĞIR
+    [KABUK_INDEKS] X YÜKLE
+    derle_etiket_adi_oku ÇAĞIR
+    0 KARŞILAŞTIR
+    derle_satir_hata EŞİTSE ATLA
+    kodla_sayi_coz ÇAĞIR
+    0 KARŞILAŞTIR
+    derle_satir_hata EŞİTSE ATLA
+    [DERLE_GECIS] T YÜKLE
+    1 KARŞILAŞTIR
+    derle_satir_tamam FARKLIYSA ATLA
+    derle_etiket_kaydet ÇAĞIR
+    DÖN
+
+derle_drk_metin:
+    1 T YÜKLE
+    T [DERLE_BAYT_YAZILDI] SAKLA
+    kabuk_bosluk_atla ÇAĞIR
+    [KABUK_INDEKS] X YÜKLE
+    [SATIR_TAMPONU + X] T YÜKLE
+    34 KARŞILAŞTIR          ; '"'
+    derle_satir_hata FARKLIYSA ATLA
+    X ARTIR
+derle_metin_dongu:
+    [SATIR_TAMPONU + X] T YÜKLE
+    0 KARŞILAŞTIR
+    derle_satir_hata EŞİTSE ATLA
+    34 KARŞILAŞTIR          ; '"'
+    derle_satir_tamam EŞİTSE ATLA
+    92 KARŞILAŞTIR          ; '\\' kaçış karakteri mi?
+    derle_metin_kacis EŞİTSE ATLA
+    kodla_bayt_yaz ÇAĞIR
+    X ARTIR
+    derle_metin_dongu ATLA
+derle_metin_kacis:
+    X ARTIR
+    [SATIR_TAMPONU + X] T YÜKLE
+    0 KARŞILAŞTIR
+    derle_satir_hata EŞİTSE ATLA
+    'n' KARŞILAŞTIR
+    derle_metin_nl EŞİTSE ATLA
+    'N' KARŞILAŞTIR
+    derle_metin_nl EŞİTSE ATLA
+    kodla_bayt_yaz ÇAĞIR
+    X ARTIR
+    derle_metin_dongu ATLA
+derle_metin_nl:
+    10 T YÜKLE
+    kodla_bayt_yaz ÇAĞIR
+    X ARTIR
+    derle_metin_dongu ATLA
+
+derle_drk_bayt:
+    1 T YÜKLE
+    T [DERLE_BAYT_YAZILDI] SAKLA
+    [KABUK_INDEKS] X YÜKLE
+derle_bayt_dongu:
+    [SATIR_TAMPONU + X] T YÜKLE
+    0 KARŞILAŞTIR
+    derle_satir_tamam EŞİTSE ATLA
+    ' ' KARŞILAŞTIR
+    derle_bayt_gec EŞİTSE ATLA
+    ',' KARŞILAŞTIR
+    derle_bayt_gec EŞİTSE ATLA
+    34 KARŞILAŞTIR          ; '"'
+    derle_bayt_metin EŞİTSE ATLA
+
+    kodla_sayi_coz ÇAĞIR
+    0 KARŞILAŞTIR
+    derle_satir_hata EŞİTSE ATLA
+    [KODLA_DEGER_ALT] T YÜKLE
+    kodla_bayt_yaz ÇAĞIR
+    derle_bayt_dongu ATLA
+
+derle_bayt_metin:
+    X ARTIR
+derle_bayt_metin_ic:
+    [SATIR_TAMPONU + X] T YÜKLE
+    0 KARŞILAŞTIR
+    derle_satir_hata EŞİTSE ATLA
+    34 KARŞILAŞTIR
+    derle_bayt_gec EŞİTSE ATLA
+    kodla_bayt_yaz ÇAĞIR
+    X ARTIR
+    derle_bayt_metin_ic ATLA
+
+derle_bayt_gec:
+    X ARTIR
+    derle_bayt_dongu ATLA
+
+derle_drk_kelime:
+    1 T YÜKLE
+    T [DERLE_BAYT_YAZILDI] SAKLA
+    [KABUK_INDEKS] X YÜKLE
+derle_kelime_dongu:
+    [SATIR_TAMPONU + X] T YÜKLE
+    0 KARŞILAŞTIR
+    derle_satir_tamam EŞİTSE ATLA
+    ' ' KARŞILAŞTIR
+    derle_kelime_gec EŞİTSE ATLA
+    ',' KARŞILAŞTIR
+    derle_kelime_gec EŞİTSE ATLA
+
+    kodla_sayi_coz ÇAĞIR
+    0 KARŞILAŞTIR
+    derle_satir_hata EŞİTSE ATLA
+    [KODLA_DEGER_ALT] T YÜKLE
+    kodla_bayt_yaz ÇAĞIR
+    [KODLA_DEGER_UST] T YÜKLE
+    kodla_bayt_yaz ÇAĞIR
+    derle_kelime_dongu ATLA
+
+derle_kelime_gec:
+    X ARTIR
+    derle_kelime_dongu ATLA
+
+derle_drk_bosluk:
+    1 T YÜKLE
+    T [DERLE_BAYT_YAZILDI] SAKLA
+    [KABUK_INDEKS] X YÜKLE
+    kodla_sayi_coz ÇAĞIR
+    0 KARŞILAŞTIR
+    derle_satir_hata EŞİTSE ATLA
+    [KODLA_DEGER_ALT] Y YÜKLE
+    0 Y KARŞILAŞTIR
+    derle_satir_tamam EŞİTSE ATLA
+derle_bosluk_yaz:
+    0 T YÜKLE
+    kodla_bayt_yaz ÇAĞIR
+    Y AZALT
+    derle_bosluk_yaz FARKLIYSA ATLA
+    derle_satir_tamam ATLA
+
+derle_makine_komutu:
+    1 T YÜKLE
+    T [DERLE_BAYT_YAZILDI] SAKLA
+    kodla_tek_satir_derle ÇAĞIR
+    DÖN
+
+derle_satir_tamam:
+    1 T YÜKLE
+    DÖN
+
+derle_satir_hata:
+    0 T YÜKLE
+    DÖN
+
+; -----------------------------------------------------------------------------
+; derle_etiket_adi_oku:
+; SATIR_TAMPONU + X konumundan geçerli bir sembol adını ('A'..'Z', '_', '0'..'9')
+; ETIKET_AD_TAMPON (0x0070..0x007D, azami 13 karakter + 0) içine okur.
+; Başarılıysa T = 1 (X sembol sonundaki karaktere ilerler), değilse T = 0 döner.
+; -----------------------------------------------------------------------------
+derle_etiket_adi_oku:
+    Y İT
+    ; İlk karakter 'A'..'Z' veya '_' olmalı
+    [SATIR_TAMPONU + X] T YÜKLE
+    '_' KARŞILAŞTIR
+    etiket_ad_basla EŞİTSE ATLA
+    'A' KARŞILAŞTIR
+    etiket_ad_hata KÜÇÜKSE ATLA
+    '[' KARŞILAŞTIR
+    etiket_ad_hata BÜYÜK VEYA EŞİTSE ATLA
+
+etiket_ad_basla:
+    0 Y YÜKLE
+etiket_ad_dongu:
+    [SATIR_TAMPONU + X] T YÜKLE
+    '_' KARŞILAŞTIR
+    etiket_ad_kabul EŞİTSE ATLA
+    '0' KARŞILAŞTIR
+    etiket_ad_son KÜÇÜKSE ATLA
+    ':' KARŞILAŞTIR
+    etiket_ad_kabul KÜÇÜKSE ATLA
+    'A' KARŞILAŞTIR
+    etiket_ad_son KÜÇÜKSE ATLA
+    '[' KARŞILAŞTIR
+    etiket_ad_son BÜYÜK VEYA EŞİTSE ATLA
+
+etiket_ad_kabul:
+    13 Y KARŞILAŞTIR
+    etiket_ad_uzun BÜYÜK VEYA EŞİTSE ATLA
+    T [ETIKET_AD_TAMPON + Y] SAKLA
+    Y ARTIR
+etiket_ad_uzun:
+    X ARTIR
+    etiket_ad_dongu ATLA
+
+etiket_ad_son:
+    0 Y KARŞILAŞTIR
+    etiket_ad_hata EŞİTSE ATLA
+    0 T YÜKLE
+    T [ETIKET_AD_TAMPON + Y] SAKLA
+    Y ÇEK
+    1 T YÜKLE
+    DÖN
+
+etiket_ad_hata:
+    Y ÇEK
+    0 T YÜKLE
+    DÖN
+
+; -----------------------------------------------------------------------------
+; derle_etiket_kaydet:
+; ETIKET_AD_TAMPON içindeki sembolü ve KODLA_DEGER_ALT/UST değerini
+; ETIKET_TABLOSU (0x7800, 64 giriş x 16 bayt) içine kaydeder.
+; -----------------------------------------------------------------------------
+derle_etiket_kaydet:
+    X İT
+    Y İT
+
+    ; Zaten kayıtlıysa mevcut girişin üzerine yaz
+    derle_etiket_bul ÇAĞIR
+    1 KARŞILAŞTIR
+    etiket_deger_yaz EŞİTSE ATLA
+
+    [ETIKET_SAYISI] T YÜKLE
+    64 KARŞILAŞTIR
+    etiket_kaydet_dolu BÜYÜK VEYA EŞİTSE ATLA
+
+    ; Giriş adresi = 0x7800 + ETIKET_SAYISI * 16
+    T [ETIKET_PTR_ALT] SAKLA
+    0 T YÜKLE
+    T [ETIKET_PTR_UST] SAKLA
+    4 Y YÜKLE
+etiket_carp_16:
+    [ETIKET_PTR_ALT] T YÜKLE
+    T SOLA KAYDIR
+    T [ETIKET_PTR_ALT] SAKLA
+    [ETIKET_PTR_UST] T YÜKLE
+    T SOLA DÖNDÜR
+    T [ETIKET_PTR_UST] SAKLA
+    Y AZALT
+    etiket_carp_16 FARKLIYSA ATLA
+
+    [ETIKET_PTR_UST] T YÜKLE
+    0x78 TOPLA
+    T [ETIKET_PTR_UST] SAKLA
+
+    ; 14 baytlık ismi kopyala
+    0 Y YÜKLE
+etiket_isim_yaz:
+    [ETIKET_AD_TAMPON + Y] T YÜKLE
+    T [[ETIKET_PTR_ALT] + Y] SAKLA
+    Y ARTIR
+    14 Y KARŞILAŞTIR
+    etiket_isim_yaz FARKLIYSA ATLA
+
+    [ETIKET_SAYISI] ARTIR
+
+etiket_deger_yaz:
+    14 Y YÜKLE
+    [KODLA_DEGER_ALT] T YÜKLE
+    T [[ETIKET_PTR_ALT] + Y] SAKLA
+    15 Y YÜKLE
+    [KODLA_DEGER_UST] T YÜKLE
+    T [[ETIKET_PTR_ALT] + Y] SAKLA
+
+    Y ÇEK
+    X ÇEK
+    1 T YÜKLE
+    DÖN
+
+etiket_kaydet_dolu:
+    Y ÇEK
+    X ÇEK
+    0 T YÜKLE
+    DÖN
+
+; -----------------------------------------------------------------------------
+; derle_etiket_bul:
+; ETIKET_TABLOSU (0x7800) içinde ETIKET_AD_TAMPON sembolünü arar.
+; Bulursa KODLA_DEGER_ALT/UST içine değerini yükler ve T = 1 döner;
+; bulamazsa T = 0 döner. X ve Y yazmaçlarını korur.
+; -----------------------------------------------------------------------------
+derle_etiket_bul:
+    X İT
+    Y İT
+
+    0 T YÜKLE
+    T [ETIKET_PTR_ALT] SAKLA
+    0x78 T YÜKLE
+    T [ETIKET_PTR_UST] SAKLA
+    0 X YÜKLE               ; X = kontrol edilen giriş indeksi
+
+etiket_ara_dongu:
+    [ETIKET_SAYISI] T YÜKLE
+    T [KABUK_HEX_GECICI] SAKLA
+    X T AKTAR
+    [KABUK_HEX_GECICI] KARŞILAŞTIR
+    etiket_bulunamadi BÜYÜK VEYA EŞİTSE ATLA
+
+    0 Y YÜKLE
+etiket_harf_kiyas:
+    [ETIKET_AD_TAMPON + Y] T YÜKLE
+    T [KABUK_HEX_GECICI] SAKLA
+    [[ETIKET_PTR_ALT] + Y] T YÜKLE
+    [KABUK_HEX_GECICI] KARŞILAŞTIR
+    etiket_sonraki_giris FARKLIYSA ATLA
+
+    0 KARŞILAŞTIR
+    etiket_eslesti EŞİTSE ATLA
+    Y ARTIR
+    14 Y KARŞILAŞTIR
+    etiket_harf_kiyas FARKLIYSA ATLA
+
+etiket_eslesti:
+    14 Y YÜKLE
+    [[ETIKET_PTR_ALT] + Y] T YÜKLE
+    T [KODLA_DEGER_ALT] SAKLA
+    15 Y YÜKLE
+    [[ETIKET_PTR_ALT] + Y] T YÜKLE
+    T [KODLA_DEGER_UST] SAKLA
+    Y ÇEK
+    X ÇEK
+    1 T YÜKLE
+    DÖN
+
+etiket_sonraki_giris:
+    [ETIKET_PTR_ALT] T YÜKLE
+    16 TOPLA
+    T [ETIKET_PTR_ALT] SAKLA
+    etiket_ptr_tamam ELDE YOKSA ATLA
+    [ETIKET_PTR_UST] ARTIR
+etiket_ptr_tamam:
+    X ARTIR
+    etiket_ara_dongu ATLA
+
+etiket_bulunamadi:
+    Y ÇEK
+    X ÇEK
     0 T YÜKLE
     DÖN
 
@@ -2306,11 +3500,43 @@ kmt_sil:
 kmt_kodla:
     .METİN "KODLA"
     .BAYT 0
+kmt_duzenle:
+    .METİN "DUZENLE"
+    .BAYT 0
+kmt_kaynak:
+    .METİN "KAYNAK"
+    .BAYT 0
+kmt_derle:
+    .METİN "DERLE"
+    .BAYT 0
+kmt_yeni:
+    .METİN "YENI"
+    .BAYT 0
 kmt_cik:
     .METİN "CIK"
     .BAYT 0
 kmt_bitti:
     .METİN "BITTI"
+    .BAYT 0
+
+; Sözde komut (direktif) şablonları
+drk_baslangic:
+    .METİN ".BASLANGIC"
+    .BAYT 0
+drk_tanim:
+    .METİN ".TANIM"
+    .BAYT 0
+drk_metin:
+    .METİN ".METIN"
+    .BAYT 0
+drk_bayt:
+    .METİN ".BAYT"
+    .BAYT 0
+drk_kelime:
+    .METİN ".KELIME"
+    .BAYT 0
+drk_bosluk:
+    .METİN ".BOSLUK"
     .BAYT 0
 
 metin_yardim:
@@ -2320,6 +3546,9 @@ metin_yardim:
     .METİN " BİLGİ          SİSTEM ÖZETİ\n"
     .METİN " [ADR] BELLEK   32 BAYT DÖKÜM\n"
     .METİN " [ADR] KODLA    SATIR ASSEMBLER\n"
+    .METİN " DÜZENLE        KAYNAK DÜZENLE\n"
+    .METİN " KAYNAK         KAYNAĞI LİSTELE\n"
+    .METİN " [AD] DERLE     KAYNAĞI DERLE\n"
     .METİN " ADR: B1 B2..   BELLEĞE YAZ\n"
     .METİN " <AD> ÇALIŞTIR  PROGRAMI AÇAR\n"
     .METİN " LİSTE          DİSK DİZİNİ\n"
@@ -2394,6 +3623,22 @@ metin_hata_disk:
 
 metin_kodla_baslik:
     .METİN "SATIR ASSEMBLER (ÇIKIŞ: BOŞ SATIR)\n"
+    .BAYT 0
+
+metin_duzenle_baslik:
+    .METİN "KAYNAK DÜZENLEYİCİ (ÇIKIŞ: BOŞ SATIR)\n"
+    .BAYT 0
+
+metin_kaynak_bos:
+    .METİN "(KAYNAK TAMPONU BOŞ)\n"
+    .BAYT 0
+
+metin_derlendi:
+    .METİN "DERLENDİ: 0x"
+    .BAYT 0
+
+metin_hata_satir:
+    .METİN "SATIR "
     .BAYT 0
 
 metin_hata_sozdizimi:
