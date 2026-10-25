@@ -98,7 +98,8 @@ static void terminal_eski_hale_getir(void) {
 #else
         tcsetattr(STDIN_FILENO, TCSANOW, &g_eski_termios);
 #endif
-        printf("\033[?25h\n"); /* İmleci geri göster */
+        printf("\033[?25h\033[?1049l\n"); /* İmleci geri göster ve ana ekrana dön */
+        fflush(stdout);
         g_terminal_degisti = false;
     }
 }
@@ -188,9 +189,9 @@ void ekran_ciz(const bellek_t *bellek) {
 /* Canlı TUI Çizimi (İmleci başa alarak titreşimsiz yenileme) */
 static void canli_arayuz_ciz(const islemci_t *islemci, const bellek_t *bellek) {
     printf("\033[H\033[1;32m");
-    printf("╔══════════════════════════════════════════╗\r\n");
-    printf("║    TÜRK-8 ETKİLEŞİMLİ CANLI BİLGİSAYAR   ║\r\n");
-    printf("╠══════════════════════════════════════════╣\r\n");
+    printf("╔════════════════════════════════════════╗\033[K\n");
+    printf("║   TÜRK-8 ETKİLEŞİMLİ CANLI BİLGİSAYAR  \033[42G║\033[K\n");
+    printf("╠════════════════════════════════════════╣\033[K\n");
 
     for (int y = 0; y < EKRAN_YUKSEKLIK; y++) {
         printf("║");
@@ -198,16 +199,16 @@ static void canli_arayuz_ciz(const islemci_t *islemci, const bellek_t *bellek) {
             kelime_t ofset = (kelime_t)(y * EKRAN_GENISLIK + x);
             vram_hucre_yazdir(bellek->veri[ADRES_VRAM_BAS + ofset]);
         }
-        printf("║\r\n");
+        printf("\033[42G║\033[K\n");
     }
 
-    printf("╠══════════════════════════════════════════╣\r\n");
-    printf("║ T: 0x%02X (%3d) | X: 0x%02X | Y: 0x%02X        ║\r\n",
+    printf("╠════════════════════════════════════════╣\033[K\n");
+    printf("║ T: 0x%02X (%3d) | X: 0x%02X | Y: 0x%02X\033[42G║\033[K\n",
            islemci->T, islemci->T, islemci->X, islemci->Y);
-    printf("║ PS: 0x%04X | YG: 0x%02X | Çevrim: %-8llu ║\r\n",
+    printf("║ PS: 0x%04X | YG: 0x%02X | Çevrim: %-6llu\033[42G║\033[K\n",
            islemci->PS, islemci->YG, (unsigned long long)islemci->toplam_cevrim);
-    printf("║ [ESC: Çıkış]  [Klavyeden yazı yazın...]  ║\r\n");
-    printf("╚══════════════════════════════════════════╝\033[0m\r\n");
+    printf("║ [ESC: Çıkış]  [Klavyeden yazı yazın...]\033[42G║\033[K\n");
+    printf("╚════════════════════════════════════════╝\033[0m\033[K");
     fflush(stdout);
 }
 
@@ -244,8 +245,8 @@ void ekran_canli_mod_baslat(void *islemci_ptr, bellek_t *bellek) {
     signal(SIGINT, sinyal_yakalayici);
     signal(SIGTERM, sinyal_yakalayici);
 
-    /* Terminali temizle ve imleci gizle */
-    printf("\033[2J\033[?25l");
+    /* Alternatif tam ekran tamponuna geç, terminali temizle ve imleci gizle */
+    printf("\033[?1049h\033[2J\033[H\033[?25l");
     fflush(stdout);
 
     g_canli_calisiyor = true;
@@ -271,9 +272,22 @@ void ekran_canli_mod_baslat(void *islemci_ptr, bellek_t *bellek) {
 #else
         bayt_t tus = 0;
         while (read(STDIN_FILENO, &tus, 1) > 0) {
-            if (tus == 27) { /* ESC */
-                cikis_istendi = true;
-                break;
+            if (tus == 27) { /* ESC veya ANSI kaçış dizisi (\033[...) */
+                bayt_t sonraki = 0;
+                if (read(STDIN_FILENO, &sonraki, 1) <= 0) {
+                    /* Arkasından bayt gelmediyse tek başına ESC tuşudur -> Çıkış */
+                    cikis_istendi = true;
+                    break;
+                }
+                /* Ok tuşu / fare tekerleği gibi çok baytlı ANSI dizisini tüket ve yoksay */
+                while (read(STDIN_FILENO, &sonraki, 1) > 0) {
+                    if ((sonraki >= 'A' && sonraki <= 'Z') ||
+                        (sonraki >= 'a' && sonraki <= 'z') ||
+                        sonraki == '~') {
+                        break;
+                    }
+                }
+                continue;
             }
             if (tus == '\r') tus = '\n';
             /* 2 baytlık UTF-8 Türkçe karakter başlangıcı mı? */

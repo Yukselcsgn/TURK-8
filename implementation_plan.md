@@ -122,8 +122,8 @@ Her faz **test geçmeden commit edilmez**. Test altyapısı Faz 0'da kurulur: `0
 - [x] `MERHABA`, `TOPLAM`, `PONG`, `KABUK` varsayılan `disk.t8` imajından açılır. Doğrulama: kaydet → yeniden başlat → yükle/çalıştır döngüsü (`tests/test_faz5_disk.py`).
 
 ### Faz 6 — Makinenin içinde program yazma
-- [ ] **6a** Monitör (Woz tarzı): `0200: A9 05 ...` ile bayt girişi, bellek dökümü, çalıştır.
-- [ ] **6b** Satır assembler: `A 0200` sonra satır satır Türkçe komut yaz.
+- [x] **6a** Monitör (Woz tarzı): `0300: 10 2A ...` ile bayt girişi, `0300:` hızlı bellek dökümü, çalıştır.
+- [x] **6b** Satır assembler (`[adres] KODLA`): 91 ISA v1.0 komutunun tamamını ve karakter/hex işlenenleri ROM içinde satır satır makine koduna çevirir (`tests/test_faz6_monitor_kodla.py`).
 - [ ] **6c** Tam ekran editör + etiketli assembler (diske kaydeder).
 > [!WARNING]
 > Assembler'ı 64 KB içinde, TÜRK-8 assembly'siyle yazmak en zor iş. 6c'de komut alt kümesiyle (tüm komutlar, ama sınırlı etiket/ifade) başlayıp genişletmeyi öneriyorum; gerekirse 6a/6b'de durup 6c'yi ayrı ele alırız.

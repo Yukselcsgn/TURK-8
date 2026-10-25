@@ -49,6 +49,12 @@
 .TANIM KABUK_BOS_GIRIS  0x00DB  ; İlk boş dizin girişinin ofseti (0xFF = yok)
 .TANIM KABUK_SON_SEKTOR 0x00DC  ; Diskteki ilk boş veri sektörü numarası
 .TANIM KABUK_SON_KELIME 0x00DD  ; Satırdaki son kelimenin başlangıç ofseti
+.TANIM KODLA_PC_ALT     0x00DE  ; Satır assembler (KODLA) yazma adresi alt baytı
+.TANIM KODLA_PC_UST     0x00DF  ; Satır assembler (KODLA) yazma adresi üst baytı
+.TANIM KODLA_OPKOD      0x00C8  ; Eşleşen komutun opkodu
+.TANIM KODLA_TIP        0x00C9  ; Eşleşen komutun işlenen tipi (0=yok, 1=8-bit, 2=16-bit)
+.TANIM KODLA_DEGER_ALT  0x00CA  ; Çözümlenen işlenen alt baytı
+.TANIM KODLA_DEGER_UST  0x00CB  ; Çözümlenen işlenen üst baytı
 
 ; BIOS Sıfır Sayfa Değişkenleri (0x00E0 - 0x00EF)
 .TANIM IMLEC_SUTUN      0x00E0  ; 0..39 arası imleç sütunu
@@ -256,6 +262,18 @@ bios_komut_dongusu:
     kabuk_komut_eslesir_mi ÇAĞIR
     1 KARŞILAŞTIR
     kabuk_sil_komutu EŞİTSE ATLA
+
+    ; --- 11) [adres] KODLA (Satır Assembler) ---
+    <kmt_kodla X YÜKLE
+    >kmt_kodla Y YÜKLE
+    kabuk_komut_eslesir_mi ÇAĞIR
+    1 KARŞILAŞTIR
+    kabuk_kodla_komutu EŞİTSE ATLA
+
+    ; --- 12) Woz Tarzı Monitör Girişi: "AAAA: BB CC ..." ---
+    kabuk_woz_kontrol_et ÇAĞIR
+    1 KARŞILAŞTIR
+    bios_komut_dongusu EŞİTSE ATLA
 
     ; Tanınmayan komut: hata mesajı yaz
     <metin_bilinmeyen X YÜKLE
@@ -808,19 +826,515 @@ kabuk_disk_hatasi:
     2 SİSTEM
     bios_komut_dongusu ATLA
 
+; =============================================================================
+; 2B. FAZ 6a — WOZ TARZI BELLEK MONİTÖRÜ ("AAAA: BB CC ..." veya "AAAA:")
+; =============================================================================
+kabuk_woz_kontrol_et:
+    ; Satır içinde ':' karakteri var mı ara
+    [KABUK_INDEKS] X YÜKLE
+woz_iki_nokta_ara:
+    [SATIR_TAMPONU + X] T YÜKLE
+    0 KARŞILAŞTIR
+    woz_degil EŞİTSE ATLA
+    ' ' KARŞILAŞTIR
+    woz_degil EŞİTSE ATLA
+    ':' KARŞILAŞTIR
+    woz_iki_nokta_bulundu EŞİTSE ATLA
+    X ARTIR
+    woz_iki_nokta_ara ATLA
+
+woz_degil:
+    0 T YÜKLE
+    DÖN
+
+woz_iki_nokta_bulundu:
+    ; ':' yerine geçici olarak ' ' koy ki kabuk_hex_adres_oku adresi temiz okusun
+    ' ' T YÜKLE
+    T [SATIR_TAMPONU + X] SAKLA
+    X İT
+    kabuk_hex_adres_oku ÇAĞIR
+    X ÇEK
+    1 KARŞILAŞTIR
+    woz_adres_tamam EŞİTSE ATLA
+
+    ; Geçerli hex adres değilse ':' karakterini geri koy ve 0 dön
+    ':' T YÜKLE
+    T [SATIR_TAMPONU + X] SAKLA
+    0 T YÜKLE
+    DÖN
+
+woz_adres_tamam:
+    ; ':' karakterinden sonraki konuma geç
+    X ARTIR
+    X [KABUK_INDEKS] SAKLA
+    kabuk_bosluk_atla ÇAĞIR
+
+    ; ':' sonrasında hiç bayt yazılmamışsa ("0300:"), o adresten 8 bayt döküm ver
+    [KABUK_INDEKS] X YÜKLE
+    [SATIR_TAMPONU + X] T YÜKLE
+    0 KARŞILAŞTIR
+    woz_tek_satir_dokum EŞİTSE ATLA
+
+    ; Ardışık hex baytları oku ve [[KABUK_ARG_ALT]] adresine yaz
+    [KABUK_ARG_ALT] T YÜKLE
+    T [KODLA_PC_ALT] SAKLA
+    [KABUK_ARG_UST] T YÜKLE
+    T [KODLA_PC_UST] SAKLA
+
+woz_bayt_dongu:
+    kabuk_bosluk_atla ÇAĞIR
+    [KABUK_INDEKS] X YÜKLE
+    [SATIR_TAMPONU + X] T YÜKLE
+    0 KARŞILAŞTIR
+    woz_yazma_bitti EŞİTSE ATLA
+
+    kabuk_hex_adres_oku ÇAĞIR
+    0 KARŞILAŞTIR
+    woz_veri_hatasi EŞİTSE ATLA
+
+    ; Baytı hedef adrese yaz ve adresi 1 artır
+    [KABUK_ARG_ALT] T YÜKLE
+    T [[KODLA_PC_ALT]] SAKLA
+    [KODLA_PC_ALT] ARTIR
+    woz_pc_artti FARKLIYSA ATLA
+    [KODLA_PC_UST] ARTIR
+woz_pc_artti:
+    woz_bayt_dongu ATLA
+
+woz_yazma_bitti:
+    1 T YÜKLE
+    DÖN
+
+woz_veri_hatasi:
+    <metin_hata_adres X YÜKLE
+    >metin_hata_adres Y YÜKLE
+    2 SİSTEM
+    1 T YÜKLE
+    DÖN
+
+woz_tek_satir_dokum:
+    T ÇEK
+    T ÇEK
+    1 T YÜKLE
+    T [KABUK_SAYAC] SAKLA
+    bellek_satir_dongu ATLA
+
+; =============================================================================
+; 2C. FAZ 6b — ETKİLEŞİMLİ SATIR ASSEMBLER ([adres] KODLA)
+; =============================================================================
+kabuk_kodla_komutu:
+    ; Varsayılan başlangıç adresi: 0x0300
+    0x00 T YÜKLE
+    T [KODLA_PC_ALT] SAKLA
+    0x03 T YÜKLE
+    T [KODLA_PC_UST] SAKLA
+
+    kabuk_bosluk_atla ÇAĞIR
+    [KABUK_INDEKS] X YÜKLE
+    [SATIR_TAMPONU + X] T YÜKLE
+    0 KARŞILAŞTIR
+    kodla_basla EŞİTSE ATLA
+
+    kabuk_hex_adres_oku ÇAĞIR
+    0 KARŞILAŞTIR
+    kabuk_adres_hatasi EŞİTSE ATLA
+    [KABUK_ARG_ALT] T YÜKLE
+    T [KODLA_PC_ALT] SAKLA
+    [KABUK_ARG_UST] T YÜKLE
+    T [KODLA_PC_UST] SAKLA
+
+kodla_basla:
+    <metin_kodla_baslik X YÜKLE
+    >metin_kodla_baslik Y YÜKLE
+    2 SİSTEM
+
+kodla_satir_dongu:
+    ; İstem: "AAAA ? "
+    [KODLA_PC_UST] T YÜKLE
+    kabuk_hex_bayt_yaz ÇAĞIR
+    [KODLA_PC_ALT] T YÜKLE
+    kabuk_hex_bayt_yaz ÇAĞIR
+    ' ' T YÜKLE
+    1 SİSTEM
+    '?' T YÜKLE
+    1 SİSTEM
+    ' ' T YÜKLE
+    1 SİSTEM
+
+    ; Kullanıcıdan assembly satırı oku
+    5 SİSTEM
+    kabuk_satir_hazirla ÇAĞIR
+
+    ; Boş satır, ".", "ÇIK" veya "BİTTİ" ise satır assembler kipinden çık
+    [KABUK_INDEKS] X YÜKLE
+    [SATIR_TAMPONU + X] T YÜKLE
+    0 KARŞILAŞTIR
+    kodla_cikis EŞİTSE ATLA
+    '.' KARŞILAŞTIR
+    kodla_cikis EŞİTSE ATLA
+
+    <kmt_cik X YÜKLE
+    >kmt_cik Y YÜKLE
+    kabuk_komut_eslesir_mi ÇAĞIR
+    1 KARŞILAŞTIR
+    kodla_cikis EŞİTSE ATLA
+
+    <kmt_bitti X YÜKLE
+    >kmt_bitti Y YÜKLE
+    kabuk_komut_eslesir_mi ÇAĞIR
+    1 KARŞILAŞTIR
+    kodla_cikis EŞİTSE ATLA
+
+    ; Eğer doğrudan "<adres> ÇALIŞTIR" yazıldıysa KODLA kipinden çıkıp çalıştır!
+    <kmt_calistir X YÜKLE
+    >kmt_calistir Y YÜKLE
+    kabuk_komut_eslesir_mi ÇAĞIR
+    1 KARŞILAŞTIR
+    kabuk_calistir_komutu EŞİTSE ATLA
+
+    ; Tek satırı derle ve KODLA_PC adresine yaz
+    kodla_tek_satir_derle ÇAĞIR
+    1 KARŞILAŞTIR
+    kodla_satir_dongu EŞİTSE ATLA
+
+    <metin_hata_sozdizimi X YÜKLE
+    >metin_hata_sozdizimi Y YÜKLE
+    2 SİSTEM
+    kodla_satir_dongu ATLA
+
+kodla_cikis:
+    bios_komut_dongusu ATLA
+
+; -----------------------------------------------------------------------------
+; kodla_tek_satir_derle:
+; SATIR_TAMPONU[KABUK_INDEKS..] içindeki Türkçe assembly satırını
+; kodla_komut_tablosu üzerinden eşleştirir, makine kodunu [[KODLA_PC_ALT]]
+; adresine yazar ve KODLA_PC adresini komut boyutu kadar ilerletir.
+; Başarılıysa T = 1, eşleşmezse T = 0 döner.
+; -----------------------------------------------------------------------------
+kodla_tek_satir_derle:
+    <kodla_komut_tablosu T YÜKLE
+    T [KABUK_SABLON_ALT] SAKLA
+    >kodla_komut_tablosu T YÜKLE
+    T [KABUK_SABLON_UST] SAKLA
+
+kodla_tablo_dongu:
+    0 Y YÜKLE
+    [[KABUK_SABLON_ALT] + Y] T YÜKLE
+    0xFF KARŞILAŞTIR
+    kodla_derle_basarisiz EŞİTSE ATLA
+    T [KODLA_OPKOD] SAKLA
+
+    Y ARTIR
+    [[KABUK_SABLON_ALT] + Y] T YÜKLE
+    T [KODLA_TIP] SAKLA
+
+    ; Şablon metni Y=2'den başlar; SATIR_TAMPONU[KABUK_INDEKS..] ile karşılaştır
+    2 Y YÜKLE
+    [KABUK_INDEKS] X YÜKLE
+
+kodla_desen_dongu:
+    [[KABUK_SABLON_ALT] + Y] T YÜKLE
+    0 KARŞILAŞTIR
+    kodla_desen_sonu EŞİTSE ATLA
+
+    ; '#' yer tutucusu mu? (Sayısal işlenen)
+    '#' KARŞILAŞTIR
+    kodla_islenen_oku EŞİTSE ATLA
+
+    ; Şablondaki boşluk: tampondaki 1 veya daha fazla boşlukla eşleşir
+    ' ' KARŞILAŞTIR
+    kodla_desen_bosluk EŞİTSE ATLA
+
+    ; Normal sabit karakter karşılaştırması
+    T [KABUK_HEX_GECICI] SAKLA
+    [SATIR_TAMPONU + X] T YÜKLE
+    [KABUK_HEX_GECICI] KARŞILAŞTIR
+    kodla_sonraki_kayit FARKLIYSA ATLA
+    X ARTIR
+    Y ARTIR
+    kodla_desen_dongu ATLA
+
+kodla_desen_bosluk:
+    ; Eğer şablondaki sıradaki karakter '+' veya ']' ise, ya da bir önceki karakter
+    ; '+' veya '[' idiyse boşluk isteğe bağlıdır; değilse en az 1 boşluk zorunludur.
+    Y İT
+    Y ARTIR
+    [[KABUK_SABLON_ALT] + Y] T YÜKLE
+    Y ÇEK
+    '+' KARŞILAŞTIR
+    kodla_opsiyonel_bosluk EŞİTSE ATLA
+    ']' KARŞILAŞTIR
+    kodla_opsiyonel_bosluk EŞİTSE ATLA
+
+    Y İT
+    Y AZALT
+    [[KABUK_SABLON_ALT] + Y] T YÜKLE
+    Y ÇEK
+    '+' KARŞILAŞTIR
+    kodla_opsiyonel_bosluk EŞİTSE ATLA
+    '[' KARŞILAŞTIR
+    kodla_opsiyonel_bosluk EŞİTSE ATLA
+
+    [SATIR_TAMPONU + X] T YÜKLE
+    ' ' KARŞILAŞTIR
+    kodla_sonraki_kayit FARKLIYSA ATLA
+kodla_fazla_bosluk_gec:
+    X ARTIR
+    [SATIR_TAMPONU + X] T YÜKLE
+    ' ' KARŞILAŞTIR
+    kodla_fazla_bosluk_gec EŞİTSE ATLA
+    Y ARTIR
+    kodla_desen_dongu ATLA
+
+kodla_opsiyonel_bosluk:
+    [SATIR_TAMPONU + X] T YÜKLE
+    ' ' KARŞILAŞTIR
+    kodla_opsiyonel_bitti FARKLIYSA ATLA
+    X ARTIR
+    kodla_opsiyonel_bosluk ATLA
+kodla_opsiyonel_bitti:
+    Y ARTIR
+    kodla_desen_dongu ATLA
+
+kodla_islenen_oku:
+    ; X konumundan itibaren 8-bit veya 16-bit sayısal işleneni oku
+    Y İT
+    kodla_sayi_coz ÇAĞIR
+    Y ÇEK
+    0 KARŞILAŞTIR
+    kodla_sonraki_kayit EŞİTSE ATLA
+    Y ARTIR
+    kodla_desen_dongu ATLA
+
+kodla_desen_sonu:
+    ; Satırın geri kalanında yalnızca boşluk veya '\0' olmalı
+kodla_son_bosluk_kontrol:
+    [SATIR_TAMPONU + X] T YÜKLE
+    0 KARŞILAŞTIR
+    kodla_eslesti_yaz EŞİTSE ATLA
+    ' ' KARŞILAŞTIR
+    kodla_sonraki_kayit FARKLIYSA ATLA
+    X ARTIR
+    kodla_son_bosluk_kontrol ATLA
+
+kodla_eslesti_yaz:
+    ; 1) Opkod baytını yaz
+    [KODLA_OPKOD] T YÜKLE
+    kodla_bayt_yaz ÇAĞIR
+
+    ; 2) İşlenen tipine göre (0, 1 veya 2 bayt) işleneni yaz
+    [KODLA_TIP] T YÜKLE
+    0 KARŞILAŞTIR
+    kodla_yaz_tamam EŞİTSE ATLA
+
+    ; Alt baytı yaz
+    [KODLA_DEGER_ALT] T YÜKLE
+    kodla_bayt_yaz ÇAĞIR
+
+    [KODLA_TIP] T YÜKLE
+    1 KARŞILAŞTIR
+    kodla_yaz_tamam EŞİTSE ATLA
+
+    ; 16-bit işlenen: üst baytı da yaz
+    [KODLA_DEGER_UST] T YÜKLE
+    kodla_bayt_yaz ÇAĞIR
+
+kodla_yaz_tamam:
+    1 T YÜKLE
+    DÖN
+
+kodla_sonraki_kayit:
+    ; Şablonun sonundaki '\0' baytını bulup bir sonraki kayda ilerle
+    [[KABUK_SABLON_ALT] + Y] T YÜKLE
+    0 KARŞILAŞTIR
+    kodla_kayit_sonu_bulundu EŞİTSE ATLA
+    Y ARTIR
+    kodla_sonraki_kayit ATLA
+
+kodla_kayit_sonu_bulundu:
+    Y ARTIR
+    Y T AKTAR
+    [KABUK_SABLON_ALT] TOPLA
+    T [KABUK_SABLON_ALT] SAKLA
+    [KABUK_SABLON_UST] T YÜKLE
+    0 ELDEYLE TOPLA
+    T [KABUK_SABLON_UST] SAKLA
+    kodla_tablo_dongu ATLA
+
+kodla_derle_basarisiz:
+    0 T YÜKLE
+    DÖN
+
+; -----------------------------------------------------------------------------
+; kodla_bayt_yaz:
+; T yazmacındaki baytı [[KODLA_PC_ALT]] adresine yazar ve KODLA_PC'yi 1 artırır.
+; -----------------------------------------------------------------------------
+kodla_bayt_yaz:
+    T [[KODLA_PC_ALT]] SAKLA
+    [KODLA_PC_ALT] ARTIR
+    kodla_bayt_yaz_cik FARKLIYSA ATLA
+    [KODLA_PC_UST] ARTIR
+kodla_bayt_yaz_cik:
+    DÖN
+
+; -----------------------------------------------------------------------------
+; kodla_sayi_coz:
+; SATIR_TAMPONU + X konumundan itibaren 'c' karakter sabiti veya onaltılık
+; (0X, $ veya doğrudan hex) sayıyı okur -> KODLA_DEGER_ALT / UST.
+; X yazmacını sayının sonuna ilerletir. Başarılıysa T = 1, değilse T = 0 döner.
+; -----------------------------------------------------------------------------
+kodla_sayi_coz:
+    ; Boşlukları geç
+kodla_sayi_bosluk:
+    [SATIR_TAMPONU + X] T YÜKLE
+    ' ' KARŞILAŞTIR
+    kodla_sayi_basla FARKLIYSA ATLA
+    X ARTIR
+    kodla_sayi_bosluk ATLA
+
+kodla_sayi_basla:
+    ; Tek tırnaklı karakter sabiti mi? ('A')
+    [SATIR_TAMPONU + X] T YÜKLE
+    39 KARŞILAŞTIR          ; 39 = '\''
+    kodla_karakter_sabiti EŞİTSE ATLA
+
+    ; '$' öneki mi?
+    '$' KARŞILAŞTIR
+    kodla_dolar_gec EŞİTSE ATLA
+
+    ; '0X' öneki mi?
+    '0' KARŞILAŞTIR
+    kodla_hex_dongu_hazirla FARKLIYSA ATLA
+    X ARTIR
+    [SATIR_TAMPONU + X] T YÜKLE
+    'X' KARŞILAŞTIR
+    kodla_0x_gec EŞİTSE ATLA
+    X AZALT
+    kodla_hex_dongu_hazirla ATLA
+
+kodla_dolar_gec:
+    X ARTIR
+    kodla_hex_dongu_hazirla ATLA
+
+kodla_0x_gec:
+    X ARTIR
+
+kodla_hex_dongu_hazirla:
+    0 T YÜKLE
+    T [KODLA_DEGER_ALT] SAKLA
+    T [KODLA_DEGER_UST] SAKLA
+    T [KABUK_SUTUN] SAKLA
+
+kodla_hex_okuma:
+    [SATIR_TAMPONU + X] T YÜKLE
+    0 KARŞILAŞTIR
+    kodla_hex_bitti EŞİTSE ATLA
+    ' ' KARŞILAŞTIR
+    kodla_hex_bitti EŞİTSE ATLA
+    ']' KARŞILAŞTIR
+    kodla_hex_bitti EŞİTSE ATLA
+    '+' KARŞILAŞTIR
+    kodla_hex_bitti EŞİTSE ATLA
+
+    '0' KARŞILAŞTIR
+    kodla_sayi_hata KÜÇÜKSE ATLA
+    ':' KARŞILAŞTIR
+    kodla_rakam_ekle KÜÇÜKSE ATLA
+
+    'A' KARŞILAŞTIR
+    kodla_sayi_hata KÜÇÜKSE ATLA
+    'G' KARŞILAŞTIR
+    kodla_sayi_hata BÜYÜK VEYA EŞİTSE ATLA
+    'A' ÇIKAR
+    10 TOPLA
+    kodla_nibble_kaydir ATLA
+
+kodla_rakam_ekle:
+    '0' ÇIKAR
+
+kodla_nibble_kaydir:
+    T [KABUK_HEX_GECICI] SAKLA
+    4 Y YÜKLE
+kodla_kaydir_4:
+    [KODLA_DEGER_ALT] T YÜKLE
+    T SOLA KAYDIR
+    T [KODLA_DEGER_ALT] SAKLA
+    [KODLA_DEGER_UST] T YÜKLE
+    T SOLA DÖNDÜR
+    T [KODLA_DEGER_UST] SAKLA
+    Y AZALT
+    kodla_kaydir_4 FARKLIYSA ATLA
+
+    [KODLA_DEGER_ALT] T YÜKLE
+    [KABUK_HEX_GECICI] VEYA
+    T [KODLA_DEGER_ALT] SAKLA
+
+    [KABUK_SUTUN] ARTIR
+    X ARTIR
+    kodla_hex_okuma ATLA
+
+kodla_hex_bitti:
+    [KABUK_SUTUN] T YÜKLE
+    0 KARŞILAŞTIR
+    kodla_sayi_hata EŞİTSE ATLA
+    1 T YÜKLE
+    DÖN
+
+kodla_karakter_sabiti:
+    X ARTIR
+    [SATIR_TAMPONU + X] T YÜKLE
+    0 KARŞILAŞTIR
+    kodla_sayi_hata EŞİTSE ATLA
+    T [KODLA_DEGER_ALT] SAKLA
+    0 T YÜKLE
+    T [KODLA_DEGER_UST] SAKLA
+    X ARTIR
+    [SATIR_TAMPONU + X] T YÜKLE
+    39 KARŞILAŞTIR
+    kodla_sayi_hata FARKLIYSA ATLA
+    X ARTIR
+    1 T YÜKLE
+    DÖN
+
+kodla_sayi_hata:
+    0 T YÜKLE
+    DÖN
+
 ; --- Kabuk Yardımcı Alt Programları ---
 
 ; -----------------------------------------------------------------------------
 ; kabuk_satir_hazirla:
 ; SATIR_TAMPONU içindeki küçük harfleri ve Türkçe karakterleri (ISO-8859-9)
 ; büyük ASCII karşılıklarına (C, G, I, O, S, U) çevirir ve baştaki boşlukları atlar.
+; Tek tırnak ('...') veya çift tırnak ("...") içindeki karakterlere dokunmaz.
 ; -----------------------------------------------------------------------------
 kabuk_satir_hazirla:
     0 X YÜKLE
+    0 Y YÜKLE               ; Y = tırnak durumu (0 = dışarıda, 39 = ' içinde, 34 = " içinde)
 satir_norm_dongu:
     [SATIR_TAMPONU + X] T YÜKLE
     0 KARŞILAŞTIR
     satir_norm_bitti EŞİTSE ATLA
+
+    ; Tırnak içinde miyiz?
+    0 Y KARŞILAŞTIR
+    satir_tirnak_disi EŞİTSE ATLA
+
+    ; Tırnak kapanışı mı?
+    Y T AKTAR
+    T [KABUK_HEX_GECICI] SAKLA
+    [SATIR_TAMPONU + X] T YÜKLE
+    [KABUK_HEX_GECICI] KARŞILAŞTIR
+    satir_norm_ilerle FARKLIYSA ATLA
+    0 Y YÜKLE
+    satir_norm_ilerle ATLA
+
+satir_tirnak_disi:
+    39 KARŞILAŞTIR          ; '\''
+    satir_tek_tirnak_ac EŞİTSE ATLA
+    34 KARŞILAŞTIR          ; '"'
+    satir_cift_tirnak_ac EŞİTSE ATLA
 
     ; Küçük ASCII 'a'..'z' (97..122) -> 'A'..'Z'
     'a' KARŞILAŞTIR
@@ -829,6 +1343,14 @@ satir_norm_dongu:
     satir_tr_kontrol BÜYÜK VEYA EŞİTSE ATLA
     32 ÇIKAR
     satir_norm_yaz ATLA
+
+satir_tek_tirnak_ac:
+    39 Y YÜKLE
+    satir_norm_ilerle ATLA
+
+satir_cift_tirnak_ac:
+    34 Y YÜKLE
+    satir_norm_ilerle ATLA
 
 satir_tr_kontrol:
     ; Ç (0xC7) / ç (0xE7) -> 'C'
@@ -1781,6 +2303,15 @@ kmt_kaydet:
 kmt_sil:
     .METİN "SIL"
     .BAYT 0
+kmt_kodla:
+    .METİN "KODLA"
+    .BAYT 0
+kmt_cik:
+    .METİN "CIK"
+    .BAYT 0
+kmt_bitti:
+    .METİN "BITTI"
+    .BAYT 0
 
 metin_yardim:
     .METİN "KOMUTLAR:\n"
@@ -1788,6 +2319,8 @@ metin_yardim:
     .METİN " TEMİZLE        EKRANI SİLER\n"
     .METİN " BİLGİ          SİSTEM ÖZETİ\n"
     .METİN " [ADR] BELLEK   32 BAYT DÖKÜM\n"
+    .METİN " [ADR] KODLA    SATIR ASSEMBLER\n"
+    .METİN " ADR: B1 B2..   BELLEĞE YAZ\n"
     .METİN " <AD> ÇALIŞTIR  PROGRAMI AÇAR\n"
     .METİN " LİSTE          DİSK DİZİNİ\n"
     .METİN " <AD> YÜKLE     BELLEĞE YÜKLE\n"
@@ -1858,6 +2391,115 @@ metin_hata_disk_dolu:
 metin_hata_disk:
     .METİN "DİSK HATASI!\n"
     .BAYT 0
+
+metin_kodla_baslik:
+    .METİN "SATIR ASSEMBLER (ÇIKIŞ: BOŞ SATIR)\n"
+    .BAYT 0
+
+metin_hata_sozdizimi:
+    .METİN "SÖZ DİZİMİ HATASI!\n"
+    .BAYT 0
+
+; -----------------------------------------------------------------------------
+; kodla_komut_tablosu:
+; Tüm 91 ISA v1.0 komutu + takma adlar.
+; Biçim: opkod (1B), işlenen_tipi (0=yok, 1=8-bit, 2=16-bit), "DESEN", 0
+; Tablo sonu: 0xFF
+; -----------------------------------------------------------------------------
+kodla_komut_tablosu:
+    .BAYT 0x00, 0, "BOS", 0
+    .BAYT 0x01, 0, "DUR", 0
+    .BAYT 0x02, 0, "KESME AC", 0
+    .BAYT 0x03, 0, "KESME KAPAT", 0
+    .BAYT 0x04, 0, "SIFIRLA", 0
+    .BAYT 0x05, 1, "# SISTEM", 0
+    .BAYT 0x06, 0, "KARE BEKLE", 0
+    .BAYT 0x07, 0, "RASTGELE", 0
+    .BAYT 0x10, 1, "# T YUKLE", 0
+    .BAYT 0x11, 2, "[#] T YUKLE", 0
+    .BAYT 0x12, 2, "[# + X] T YUKLE", 0
+    .BAYT 0x13, 1, "# X YUKLE", 0
+    .BAYT 0x14, 1, "# Y YUKLE", 0
+    .BAYT 0x15, 2, "T [#] SAKLA", 0
+    .BAYT 0x16, 2, "T [# + X] SAKLA", 0
+    .BAYT 0x17, 2, "X [#] SAKLA", 0
+    .BAYT 0x18, 2, "Y [#] SAKLA", 0
+    .BAYT 0x19, 0, "X T AKTAR", 0
+    .BAYT 0x1A, 0, "T X AKTAR", 0
+    .BAYT 0x1B, 0, "Y T AKTAR", 0
+    .BAYT 0x1C, 0, "T Y AKTAR", 0
+    .BAYT 0x1D, 2, "[[#]] T YUKLE", 0
+    .BAYT 0x1E, 2, "T [[#]] SAKLA", 0
+    .BAYT 0x20, 2, "[#] X YUKLE", 0
+    .BAYT 0x21, 2, "[#] Y YUKLE", 0
+    .BAYT 0x22, 2, "[# + Y] T YUKLE", 0
+    .BAYT 0x23, 2, "T [# + Y] SAKLA", 0
+    .BAYT 0x24, 2, "[[#] + Y] T YUKLE", 0
+    .BAYT 0x25, 2, "T [[#] + Y] SAKLA", 0
+    .BAYT 0x26, 0, "YG T AKTAR", 0
+    .BAYT 0x27, 0, "T YG AKTAR", 0
+    .BAYT 0x28, 0, "KOPYALA", 0
+    .BAYT 0x29, 0, "DOLDUR", 0
+    .BAYT 0x30, 1, "# TOPLA", 0
+    .BAYT 0x31, 2, "[#] TOPLA", 0
+    .BAYT 0x32, 1, "# ELDEYLE TOPLA", 0
+    .BAYT 0x33, 1, "# CIKAR", 0
+    .BAYT 0x34, 2, "[#] CIKAR", 0
+    .BAYT 0x35, 0, "T ARTIR", 0
+    .BAYT 0x36, 0, "X ARTIR", 0
+    .BAYT 0x37, 0, "Y ARTIR", 0
+    .BAYT 0x38, 0, "T AZALT", 0
+    .BAYT 0x39, 0, "X AZALT", 0
+    .BAYT 0x3A, 0, "Y AZALT", 0
+    .BAYT 0x3B, 1, "# KARSILASTIR", 0
+    .BAYT 0x3C, 1, "# X KARSILASTIR", 0
+    .BAYT 0x3D, 1, "# Y KARSILASTIR", 0
+    .BAYT 0x3E, 2, "[#] KARSILASTIR", 0
+    .BAYT 0x3F, 1, "# BORCLA CIKAR", 0
+    .BAYT 0x40, 0, "ELDE KUR", 0
+    .BAYT 0x41, 0, "ELDE TEMIZLE", 0
+    .BAYT 0x42, 2, "[#] ARTIR", 0
+    .BAYT 0x43, 2, "[#] AZALT", 0
+    .BAYT 0x44, 0, "T RAKAMLARA AYIR", 0
+    .BAYT 0x50, 1, "# VE", 0
+    .BAYT 0x51, 1, "# VEYA", 0
+    .BAYT 0x52, 1, "# OZELVEYA", 0
+    .BAYT 0x53, 0, "T DEGILLE", 0
+    .BAYT 0x54, 0, "T SOLA KAYDIR", 0
+    .BAYT 0x55, 0, "T SAGA KAYDIR", 0
+    .BAYT 0x56, 0, "T SOLA DONDUR", 0
+    .BAYT 0x57, 0, "T SAGA DONDUR", 0
+    .BAYT 0x58, 1, "# BIT SINA", 0
+    .BAYT 0x59, 2, "[#] VE", 0
+    .BAYT 0x5A, 2, "[#] VEYA", 0
+    .BAYT 0x70, 2, "# ATLA", 0
+    .BAYT 0x71, 2, "# ESITSE ATLA", 0
+    .BAYT 0x72, 2, "# FARKLIYSA ATLA", 0
+    .BAYT 0x73, 2, "# BUYUKSE ATLA", 0
+    .BAYT 0x74, 2, "# KUCUKSE ATLA", 0
+    .BAYT 0x75, 2, "# ELDE VARSA ATLA", 0
+    .BAYT 0x76, 2, "# ELDE YOKSA ATLA", 0
+    .BAYT 0x77, 2, "# NEGATIFSE ATLA", 0
+    .BAYT 0x78, 2, "# POZITIFSE ATLA", 0
+    .BAYT 0x79, 2, "# TASMA VARSA ATLA", 0
+    .BAYT 0x7A, 2, "# KUCUK VEYA ESITSE ATLA", 0
+    .BAYT 0x7B, 2, "[#] ATLA", 0
+    .BAYT 0x7C, 2, "[#] CAGIR", 0
+    .BAYT 0x90, 2, "# CAGIR", 0
+    .BAYT 0x91, 0, "DON", 0
+    .BAYT 0x92, 0, "KESMEDEN DON", 0
+    .BAYT 0x93, 0, "T IT", 0
+    .BAYT 0x94, 0, "T CEK", 0
+    .BAYT 0x95, 0, "DURUM IT", 0
+    .BAYT 0x96, 0, "DURUM CEK", 0
+    .BAYT 0x97, 0, "X IT", 0
+    .BAYT 0x98, 0, "X CEK", 0
+    .BAYT 0x99, 0, "Y IT", 0
+    .BAYT 0x9A, 0, "Y CEK", 0
+    .BAYT 0xB0, 1, "# GIRIS", 0
+    .BAYT 0xB1, 1, "# CIKIS", 0
+    .BAYT 0x75, 2, "# BUYUK VEYA ESITSE ATLA", 0
+    .BAYT 0xFF
 
 ; =============================================================================
 ; 7. İŞLEMCİ VEKTÖR TABLOSU (0xFFFA - 0xFFFF)
